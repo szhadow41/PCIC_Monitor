@@ -232,6 +232,21 @@ Object.entries(provinces).forEach(([prov,munis])=>{
   });
 });
 loadSavedData();
+// Seed from the shared online snapshot when this browser has nothing saved yet.
+// Fully guarded: missing file, bad shape, offline, or file:// use fall through silently.
+try{
+  let savedNow=false;
+  try{savedNow=!!localStorage.getItem(STORAGE_KEY);}catch(e){}
+  if(!savedNow&&typeof fetch==='function'){
+    fetch('shared-data.json?v='+Date.now()).then(r=>{if(!r.ok)throw 0;return r.json();}).then(obj=>{
+      const chk=validateBackup(obj);
+      if(!chk.ok)return;
+      Object.keys(obj.data).forEach(k=>{Object.assign(data[k],obj.data[k]);});
+      saveData();recalcDerived();render();populateTopBar();
+      toast('Loaded shared dataset ('+chk.count+' records)','success');
+    }).catch(()=>{});
+  }
+}catch(e){}
 // Migrate old saved totalFarmers25 to individual OBJ values
 Object.keys(data).forEach(k=>{
 const d=data[k];
@@ -548,6 +563,17 @@ function validateBackup(obj){
 }
 function doRestore(){
   document.getElementById('restoreInput').click();
+}
+function loadShared(){
+  if(typeof fetch!=='function'){toast('Shared data needs an online connection','error');return;}
+  fetch('shared-data.json?v='+Date.now()).then(r=>{if(!r.ok)throw new Error('not found');return r.json();}).then(obj=>{
+    const chk=validateBackup(obj);
+    if(!chk.ok){toast('Shared data invalid: '+chk.reason,'error');return;}
+    if(!confirm('Load shared dataset'+(chk.exportedAt?' from '+chk.exportedAt:'')+' ('+chk.count+' records)? Current entries will be replaced.'))return;
+    Object.keys(obj.data).forEach(k=>{Object.assign(data[k],obj.data[k]);});
+    saveData();recalcDerived();render();populateTopBar();
+    toast('Shared dataset loaded ('+chk.count+' records)','success');
+  }).catch(()=>toast('Shared data unavailable','error'));
 }
 document.getElementById('restoreInput').addEventListener('change',async function(e){
   const file=e.target.files[0];
@@ -881,6 +907,7 @@ function populateTopBar(){
     <button class="btn btn-primary" id="exportBtn">Export CSV</button>
     <button class="btn btn-outline btn-sm" id="backupBtn">Backup</button>
     <button class="btn btn-outline btn-sm" id="restoreBtn">Restore</button>
+    <button class="btn btn-outline btn-sm" id="sharedBtn">Shared</button>
     <div class="stats">
       <div class="stat-card"><div class="num">${muniCount}</div><div class="lbl">Municipalities</div></div>
       <div class="stat-card"><div class="num">${fmtNum(totalFarmers)}</div><div class="lbl">Total Farmers</div></div>
@@ -921,6 +948,7 @@ function populateTopBar(){
   // Wire up backup / restore (file-based safekeeping alongside localStorage autosave)
   document.getElementById('backupBtn').addEventListener('click',backupData);
   document.getElementById('restoreBtn').addEventListener('click',doRestore);
+  document.getElementById('sharedBtn').addEventListener('click',loadShared);
   // Wire up collapsible sections
   document.querySelectorAll('.province-section h2').forEach(h2=>{
     h2.addEventListener('click',function(){this.parentElement.classList.toggle('collapsed')});
