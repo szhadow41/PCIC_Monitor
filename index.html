@@ -172,6 +172,10 @@ body.compact .table-wrapper{max-height:70vh}
   input[type="number"],input.uw-input{border:none;background:transparent;box-shadow:none}
   .province-section,.grand-total{break-inside:avoid}
 }
+/* Ranking tables: cancel the frozen-column offsets (they belong to main tables only).
+   Without this, the 2nd-column offset slides underwriter names over municipality names. */
+.rank-tbl td:first-child,.rank-tbl th:first-child{min-width:0;max-width:none}
+.rank-tbl tbody tr td.muni-name:nth-child(2){left:auto;z-index:auto}
 
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
