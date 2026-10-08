@@ -113,6 +113,7 @@ tr.subtotal .tgt-col{color:var(--brand)}
 .rating-total{font-size:1.05rem;font-weight:800;padding:5px 18px;min-width:70px;box-shadow:0 1px 4px rgba(0,0,0,.25);letter-spacing:.2px}
 .locked input[type="number"],.locked input[type="text"]{pointer-events:none;opacity:.55}
 .locked .pdf-btn,.locked .pdf-btn25,.locked .pdf-btn:disabled,.locked .pdf-btn25:disabled{display:none}
+.locked #lockBtn,.locked #backupBtn,.locked #restoreBtn,.locked #excelBtn,.locked #checkBtn{display:none}
 /* Pct bar */
 .pct-val{font-weight:600;color:var(--ink);min-width:36px;text-align:right;font-size:.78rem}
 /* Toast */
@@ -593,7 +594,7 @@ function closeLockModal(){
 }
 function submitLockModal(){
   const v=document.getElementById('lockInput').value;
-  if(gateRole(v)===null){toast('Wrong passcode','error');return;}
+  if(gateRole(v)!=='admin'){toast('Wrong passcode','error');return;}
   closeLockModal();
   setLocked(false);
 }
@@ -834,8 +835,8 @@ document.getElementById('disOk').addEventListener('click',function(){
   document.getElementById('disclaimerModal').classList.remove('show');
 });
 // --- ENTRY GATE (admin now; viewer codes fill VIEW_PASSWORDS later, same rights) ---
-const ADMIN_PASSWORD='PCICRegion10';
-const VIEW_PASSWORDS=[];
+const ADMIN_PASSWORD='Zareenah7';
+const VIEW_PASSWORDS=['PCICRegion10'];
 function gateRole(v){
   if(v===ADMIN_PASSWORD)return'admin';
   if(VIEW_PASSWORDS.indexOf(v)>=0)return'viewer';
@@ -843,9 +844,10 @@ function gateRole(v){
 }
 function submitGate(){
   const v=document.getElementById('gateInput').value;
-  if(gateRole(v)===null){toast('Wrong password','error');return;}
+  const role=gateRole(v);
+  if(role===null){toast('Wrong password','error');return;}
   document.getElementById('gateModal').classList.remove('show');
-  setLocked(false);
+  setLocked(role!=='admin');
 }
 document.getElementById('gateOk').addEventListener('click',submitGate);
 document.getElementById('gateInput').addEventListener('keydown',function(e){
@@ -1190,7 +1192,7 @@ function populateTopBar(){
     <button class="btn btn-primary" id="exportBtn">Export CSV</button>
     <button class="btn btn-outline btn-sm" id="backupBtn">Backup</button>
     <button class="btn btn-outline btn-sm" id="restoreBtn">Restore</button>
-    <button class="btn btn-outline btn-sm" id="sharedBtn">Shared</button>
+    <button class="btn btn-outline btn-sm" id="sharedBtn">Update</button>
     <button class="btn btn-outline btn-sm" id="excelBtn">Excel</button>
     <button class="btn btn-outline btn-sm" id="checkBtn">Check</button>
     <div class="stats">
