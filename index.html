@@ -161,6 +161,7 @@ thead th.muni-col{left:130px}
 body.compact td,body.compact th{padding:2px 4px;font-size:.72rem}
 body.compact input[type="number"]{width:58px;padding:2px 4px}
 body.compact .table-wrapper{max-height:70vh}
+body.compact .cc-crops,body.compact .cc-crops-g{display:none}
 @media print{
   @page{size:landscape;margin:10mm}
   body{background:#fff;padding:0}
@@ -176,9 +177,45 @@ body.compact .table-wrapper{max-height:70vh}
    Without this, the 2nd-column offset slides underwriter names over municipality names. */
 .rank-tbl td:first-child,.rank-tbl th:first-child{min-width:0;max-width:none}
 .rank-tbl tbody tr td.muni-name:nth-child(2){left:auto;z-index:auto}
+/* Frozen columns done right (main tables): province cells (rowspan) freeze at 0,
+   municipality cells at 130px — identical slot in every row, scrolled or not */
+.province-section tbody td.muni-name[rowspan]{left:0;z-index:3}
+.province-section tbody td.muni-name:not([rowspan]){left:130px;z-index:3}
+/* Excel check modal */
+#checkModal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:997;align-items:center;justify-content:center}
+#checkModal.show{display:flex}
+.check-box{background:#fff;border-radius:10px;padding:20px 22px;width:min(720px,94vw);max-height:86vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.25)}
+.check-box h3{font-size:1rem;color:var(--ink);margin-bottom:6px}
+.check-box p{font-size:.8rem;color:var(--muted);margin-bottom:10px}
+.check-table-wrap{overflow:auto;border:1px solid #dfe6ee;border-radius:6px;margin-bottom:10px}
+.check-tbl{width:100%;border-collapse:collapse;font-size:.78rem}
+.check-tbl th{background:var(--brand);color:#fff;padding:6px 8px;position:sticky;top:0;text-align:left;white-space:nowrap}
+.check-tbl td{padding:5px 8px;border-bottom:1px solid #eee;text-align:left;white-space:nowrap}
+.check-tbl td.num{text-align:right;font-variant-numeric:tabular-nums}
+/* Disclaimer popup (every visit, blocking) */
+#disclaimerModal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(20,30,45,.55);z-index:1000;align-items:center;justify-content:center;padding:16px}
+#disclaimerModal.show{display:flex}
+.dis-box{background:#fff;border-radius:10px;padding:28px 30px;width:min(640px,94vw);max-height:86vh;overflow:auto;box-shadow:0 8px 32px rgba(0,0,0,.3);border-top:6px solid var(--brand)}
+.dis-box h3{font-size:1.5rem;color:var(--brand);margin-bottom:10px}
+.dis-box p{font-size:1.05rem;color:var(--ink);margin-bottom:12px;line-height:1.6}
+.dis-box p.dis-sub{font-weight:700;text-align:center;font-size:1.15rem}
+/* Entry gate (password first, above everything incl. disclaimer) */
+#gateModal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,25,40,.72);-webkit-backdrop-filter:blur(12px) saturate(1.3);backdrop-filter:blur(12px) saturate(1.3);z-index:1100;align-items:center;justify-content:center;padding:16px}
+#gateModal.show{display:flex}
+.gate-box{background:#fff;border-radius:12px;padding:34px 36px;width:min(440px,94vw);box-shadow:0 12px 40px rgba(0,0,0,.35);border-top:6px solid var(--brand)}
+.gate-box h3{font-size:1.7rem;font-weight:800;letter-spacing:.3px;color:var(--brand);margin-bottom:10px;text-align:center}
+.gate-box p{font-size:1.05rem;color:var(--muted);margin-bottom:14px;text-align:center}
+.gate-box input{width:100%;padding:12px;border:1px solid #c4d2e0;border-radius:6px;font-size:1rem;margin-bottom:14px}
+.gate-box input:focus{outline:none;border-color:var(--accent)}
+.gate-box .lock-actions{justify-content:center}
+.gate-box .lock-actions .btn{width:100%;padding:11px;font-size:.95rem}
+.show-pw{display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted);margin-bottom:12px;cursor:pointer;user-select:none}
+.show-pw input{width:15px;height:15px;margin:0;accent-color:var(--brand);flex:none}
+#lockModal,#checkModal,#disclaimerModal{-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
 
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 <div class="app">
@@ -187,13 +224,37 @@ body.compact .table-wrapper{max-height:70vh}
 </div>
 <input type="file" accept=".pdf" id="pdfInput" style="display:none">
 <input type="file" accept=".json,application/json" id="restoreInput" style="display:none">
+<input type="file" accept=".xlsx,.xls" id="excelInput" style="display:none">
 <div id="toast"></div>
 <div id="loading"><div class="spinner"></div></div>
 <div id="lockModal"><div class="lock-box">
   <h3>Unlock editing</h3>
   <p>Enter passcode to unlock editing.</p>
   <input type="password" id="lockInput" placeholder="Passcode" autocomplete="off">
+  <label class="show-pw"><input type="checkbox" id="lockShow"> Show password</label>
   <div class="lock-actions"><button class="btn btn-outline btn-sm" id="lockCancel">Cancel</button><button class="btn btn-primary btn-sm" id="lockOk">Unlock</button></div>
+</div></div>
+<div id="checkModal"><div class="check-box">
+  <h3>Excel check</h3>
+  <p id="checkSummary"></p>
+  <div class="check-table-wrap"><table class="check-tbl"><thead><tr><th>Municipality</th><th>Province</th><th>Underwriter</th><th>Field</th><th>Excel</th><th>App</th></tr></thead><tbody id="checkBody"></tbody></table></div>
+  <p id="checkSkipped"></p>
+  <div class="lock-actions"><button class="btn btn-outline btn-sm" id="checkCancel">Cancel</button><button class="btn btn-primary btn-sm" id="checkApply">Apply</button></div>
+</div></div>
+<div id="disclaimerModal" class="show"><div class="dis-box">
+  <h3>Disclaimer</h3>
+  <p class="dis-sub">Unofficial PCIC Underwriter Monitoring Tool.</p>
+  <p class="dis-sub">For General Information Only.</p>
+  <p>This shows the Production Accomplishment of each Municipality/City under the area of responsibility per Underwriter. The current figures show the comparison between the recent production output as against the target for the current year.</p>
+  <p>All Information are subject to revisions and any suggestive marks are not binding to the PCIC and to those indicated personnel.</p>
+  <div class="lock-actions"><button class="btn btn-primary" id="disOk">Acknowledge</button></div>
+</div></div>
+<div id="gateModal" class="show"><div class="gate-box">
+  <h3>🔒 Restricted Access</h3>
+  <p>Enter password to view this page.</p>
+  <input type="password" id="gateInput" placeholder="Password" autocomplete="off">
+  <label class="show-pw"><input type="checkbox" id="gateShow"> Show password</label>
+  <div class="lock-actions"><button class="btn btn-primary" id="gateOk">Enter</button></div>
 </div></div>
 <script>
 if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -218,13 +279,23 @@ const colGroups=[
 {label:'Overall Score',cols:['overall']}
 ];
 const columns=['rice','rice25','corn','corn25','hvc','hvc25','fsh','fsh25','liv','liv25','nca','nca25','totalFarmers','totalFarmers25','totalPct','cfidp26','cfidp25','cfidpPct','adss26','adss25','adssPct','agriAgra','agriAgra25','agriAgraPct','regular','regular25','regularPct','gps2026','gps2025','gpsPct','overall'];
+const CROP_COLS=['rice','rice25','corn','corn25','hvc','hvc25','fsh','fsh25','liv','liv25','nca','nca25'];
 const colLabels={underwriter:'Underwriter',rice:'RICE',rice25:'RICE Tgt',corn:'CORN',corn25:'CORN Tgt',hvc:'HVC',hvc25:'HVC Tgt',fsh:'FSH',fsh25:'FSH Tgt',liv:'LIV',liv25:'LIV Tgt',nca:'NCA',nca25:'NCA Tgt',totalFarmers:'Farmers YTD',totalFarmers25:"Farmers Tgt",totalPct:'Total %',cfidp26:"CFIDP YTD",cfidp25:"CFIDP Tgt",cfidpPct:'CFIDP %',adss26:"ADSS YTD",adss25:"ADSS Tgt",adssPct:'ADSS %',agriAgra:'AGRI-AGRA YTD',agriAgra25:"AGRI-AGRA Tgt",agriAgraPct:'AGRI-AGRA %',regular:'Regular YTD',regular25:"Regular Tgt",regularPct:'Regular %',gps2026:'GPS YTD',gps2025:'GPS Tgt',gpsPct:'GPS %',overall:'Overall Score'};
 // Frozen CSV headers (byte-identical to pre-redesign labels; do not edit)
 const csvLabels={underwriter:'Underwriter',rice:'RICE',rice25:'RICE Tgt',corn:'CORN',corn25:'CORN Tgt',hvc:'HVC',hvc25:'HVC Tgt',fsh:'FSH',fsh25:'FSH Tgt',liv:'LIV',liv25:'LIV Tgt',nca:'NCA',nca25:'NCA Tgt',totalFarmers:'Farmers',totalFarmers25:"Farmers Tgt",totalPct:'Total %',cfidp26:"CFIDP",cfidp25:"CFIDP Tgt",cfidpPct:'CFIDP%',adss26:"ADSS",adss25:"ADSS Tgt",adssPct:'ADSS%',agriAgra:'AGRI-AGRA',agriAgra25:"AGRI-AGRA Tgt",agriAgraPct:'AGRI-AGRA%',regular:'Regular',regular25:"Regular Tgt",regularPct:'Regular%',gps2026:'GPS',gps2025:'GPS Tgt',gpsPct:'GPS %',overall:'Overall'};
 
-const data={};const STORAGE_KEY='region10_summary';
+const data={};const STORAGE_KEY='region10_summary_exp';const LEGACY_STORAGE_KEY='region10_summary';
 function saveData(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(data))}catch(e){}}
-function loadSavedData(){try{const s=localStorage.getItem(STORAGE_KEY);if(s){const p=JSON.parse(s);Object.keys(p).forEach(k=>{if(data[k])Object.assign(data[k],p[k])})}}catch(e){}}
+function loadSavedData(){try{
+  let s=localStorage.getItem(STORAGE_KEY);
+  if(!s){
+    try{
+      const legacy=localStorage.getItem(LEGACY_STORAGE_KEY);
+      if(legacy){localStorage.setItem(STORAGE_KEY,legacy);s=legacy;}
+    }catch(e2){}
+  }
+  if(s){const p=JSON.parse(s);Object.keys(p).forEach(k=>{if(data[k])Object.assign(data[k],p[k])})}
+}catch(e){}}
 Object.entries(provinces).forEach(([prov,munis])=>{
   munis.forEach(muni=>{
     [1].forEach(r=>{
@@ -246,16 +317,17 @@ try{
       const chk=validateBackup(obj);
       if(!chk.ok)return;
       Object.keys(obj.data).forEach(k=>{Object.assign(data[k],obj.data[k]);});
+    Object.keys(obj.data).forEach(k=>{if(data[k])migrateRow(data[k]);});
       saveData();recalcDerived();render();populateTopBar();
       toast('Loaded shared dataset ('+chk.count+' records)','success');
     }).catch(()=>{});
   }
 }catch(e){}
-// Migrate old saved totalFarmers25 to individual OBJ values
-Object.keys(data).forEach(k=>{
-const d=data[k];
-if(d.totalFarmers25>0&&!d.rice25&&!d.corn25&&!d.hvc25&&!d.liv25&&!d.fsh25&&!d.nca25){const s=(d.rice||0)+(d.corn||0)+(d.hvc||0)+(d.fsh||0)+(d.liv||0)+(d.nca||0);if(s>0){d.rice25=Math.round(d.totalFarmers25*(d.rice||0)/s);d.corn25=Math.round(d.totalFarmers25*(d.corn||0)/s);d.hvc25=Math.round(d.totalFarmers25*(d.hvc||0)/s);d.fsh25=Math.round(d.totalFarmers25*(d.fsh||0)/s);d.liv25=Math.round(d.totalFarmers25*(d.liv||0)/s);d.nca25=d.totalFarmers25-d.rice25-d.corn25-d.hvc25-d.fsh25-d.liv25}else{d.rice25=d.corn25=d.hvc25=d.fsh25=d.liv25=0;d.nca25=d.totalFarmers25}}
-});
+// Migrate old saved totalFarmers25 to individual crop targets (runs at load + after shared/restore snapshots)
+function migrateRow(d){
+if(!d.farmersTgtManual&&d.totalFarmers25>0&&!d.rice25&&!d.corn25&&!d.hvc25&&!d.liv25&&!d.fsh25&&!d.nca25){const s=(d.rice||0)+(d.corn||0)+(d.hvc||0)+(d.fsh||0)+(d.liv||0)+(d.nca||0);if(s>0){d.rice25=Math.round(d.totalFarmers25*(d.rice||0)/s);d.corn25=Math.round(d.totalFarmers25*(d.corn||0)/s);d.hvc25=Math.round(d.totalFarmers25*(d.hvc||0)/s);d.fsh25=Math.round(d.totalFarmers25*(d.fsh||0)/s);d.liv25=Math.round(d.totalFarmers25*(d.liv||0)/s);d.nca25=d.totalFarmers25-d.rice25-d.corn25-d.hvc25-d.fsh25-d.liv25}else{d.rice25=d.corn25=d.hvc25=d.fsh25=d.liv25=0;d.nca25=d.totalFarmers25}}
+}
+Object.keys(data).forEach(k=>migrateRow(data[k]));
 recalcDerived();
 ['Malaybalay City','Cabanglasan','Lantapan','Sumilao','Impasugong','San Fernando'].forEach(m=>{
   data[`Bukidnon||${m}||1`].underwriter='Leonie Lee Baguhin';
@@ -269,7 +341,7 @@ recalcDerived();
 ['Baungon','Talakag','Libona','Malitbog','Manolo Fortich'].forEach(m=>{
   data[`Bukidnon||${m}||1`].underwriter='Emeliano Loreto III';
 });
-['Tagoloan','Villanueva','Claveria'].forEach(m=>{
+['Claveria'].forEach(m=>{
   data[`Misamis Oriental||${m}||1`].underwriter='Emeliano Loreto III';
 });
 ['Balingasag','Balingoan','Binuangan','Jasaan','Kinoguitan','Lagonglong','Salay','Sugbongcogon'].forEach(m=>{
@@ -284,7 +356,7 @@ recalcDerived();
 ['Catarman','Guinsiliban','Mahinog','Mambajao','Sagay'].forEach(m=>{
   data[`Camiguin||${m}||1`].underwriter='Winston Khu';
 });
-['Gingoog City','Magsaysay','Medina','Talisayan'].forEach(m=>{
+['Gingoog City','Magsaysay','Medina','Talisayan','Cagayan de Oro City','Tagoloan','Villanueva'].forEach(m=>{
   data[`Misamis Oriental||${m}||1`].underwriter='John Anthony Uayan';
 });
 ['Bayugan','Esperanza','Prosperidad','San Luis','Sibagat','Talacogon'].forEach(m=>{
@@ -314,21 +386,21 @@ recalcDerived();
 ['Basilisa','Cagdianao','Dinagat','Libjo','Loreto','San Jose','Tubajon'].forEach(m=>{
   data[`Dinagat Islands||${m}||1`].underwriter='Jazmine Estrella';
 });
-['Alubijid','Cagayan de Oro City','El Salvador City','Gitagum','Initao','Laguindingan','Libertad','Lugait','Manticao','Naawan','Opol'].forEach(m=>{
+['Alubijid','El Salvador City','Gitagum','Initao','Laguindingan','Libertad','Lugait','Manticao','Naawan','Opol'].forEach(m=>{
   data[`Misamis Oriental||${m}||1`].underwriter='Nikki Jo Ello';
 });
-const PASSCODE='Zareenah7';let locked=true;let rankSortCol='',rankSortDir='',detailSortCol='',detailSortDir='';let currentFilter='All',compactMode=false,mainSortCol='',mainSortDir='';
+let locked=true;let rankSortCol='',rankSortDir='',detailSortCol='',detailSortDir='';let currentFilter='All',compactMode=false,mainSortCol='',mainSortDir='';
 function recalcDerived(){
   Object.keys(data).forEach(k=>{
     const d=data[k];
     d.totalFarmers=(d.rice||0)+(d.corn||0)+(d.hvc||0)+(d.fsh||0)+(d.liv||0)+(d.nca||0);
-    d.totalFarmers25=(d.rice25||0)+(d.corn25||0)+(d.hvc25||0)+(d.liv25||0)+(d.fsh25||0)+(d.nca25||0);
+    d.totalFarmers25=effFarmersTgt(d);
     d.totalPct=d.totalFarmers25>0?pctOf(d.totalFarmers,d.totalFarmers25):'';
     d.gpsPct=d.gps2025>0?pctOf(d.gps2026,d.gps2025):'';
     d.cfidpPct=pctOf(d.cfidp26,d.cfidp25);
     d.adssPct=d.adss25>0?pctOf(d.adss26,d.adss25):'';
     d.agriAgraPct=d.agriAgra25>0?pctOf(d.agriAgra,d.agriAgra25):unmeasuredPct(d.agriAgra);
-    d.regularPct=d.regular25>0?pctOf(d.regular,d.regular25):unmeasuredPct(d.regular);
+    d.regularPct=d.regular25>0?pctOf(d.regular,d.regular25):unmeasuredRegular(d.regular);
     d.overall=overallFor(d);
   });
 }
@@ -366,13 +438,13 @@ function overallFor(r){
 function getTotals(prov){
 const t=sumCols(prov);
 t.totalFarmers=t.rice+t.corn+t.hvc+t.fsh+t.liv+t.nca;
-t.totalFarmers25=t.rice25+t.corn25+t.hvc25+t.liv25+t.fsh25+t.nca25;
+/* totalFarmers25 already summed above (incl. manual Excel totals); do not recompute */
 t.totalPct=t.totalFarmers25>0?pctOf(t.totalFarmers,t.totalFarmers25):'';
 t.gpsPct=t.gps2025>0?pctOf(t.gps2026,t.gps2025):'';
 t.cfidpPct=pctOf(t.cfidp26,t.cfidp25);
 t.adssPct=t.adss25>0?pctOf(t.adss26,t.adss25):'';
 t.agriAgraPct=t.agriAgra25>0?pctOf(t.agriAgra,t.agriAgra25):unmeasuredPct(t.agriAgra);
-t.regularPct=t.regular25>0?pctOf(t.regular,t.regular25):unmeasuredPct(t.regular);
+t.regularPct=t.regular25>0?pctOf(t.regular,t.regular25):unmeasuredRegular(t.regular);
 t.overall=overallFor(t);
 return t;
 }
@@ -383,13 +455,13 @@ const pt=sumCols(prov);
 columns.forEach(c=>{if(!pctCols.includes(c))t[c]+=pt[c]});
 });
 t.totalFarmers=t.rice+t.corn+t.hvc+t.fsh+t.liv+t.nca;
-t.totalFarmers25=t.rice25+t.corn25+t.hvc25+t.liv25+t.fsh25+t.nca25;
+/* totalFarmers25 already summed above (incl. manual Excel totals); do not recompute */
 t.totalPct=t.totalFarmers25>0?pctOf(t.totalFarmers,t.totalFarmers25):'';
 t.gpsPct=t.gps2025>0?pctOf(t.gps2026,t.gps2025):'';
 t.cfidpPct=pctOf(t.cfidp26,t.cfidp25);
 t.adssPct=t.adss25>0?pctOf(t.adss26,t.adss25):'';
 t.agriAgraPct=t.agriAgra25>0?pctOf(t.agriAgra,t.agriAgra25):unmeasuredPct(t.agriAgra);
-t.regularPct=t.regular25>0?pctOf(t.regular,t.regular25):unmeasuredPct(t.regular);
+t.regularPct=t.regular25>0?pctOf(t.regular,t.regular25):unmeasuredRegular(t.regular);
 t.overall=overallFor(t);
 return t;
 }
@@ -401,13 +473,13 @@ function sumItems(items){
     });
   });
 t.totalFarmers=t.rice+t.corn+t.hvc+t.fsh+t.liv+t.nca;
-t.totalFarmers25=t.rice25+t.corn25+t.hvc25+t.liv25+t.fsh25+t.nca25;
+/* totalFarmers25 already summed above (incl. manual Excel totals); do not recompute */
 t.totalPct=t.totalFarmers25>0?pctOf(t.totalFarmers,t.totalFarmers25):'';
   t.gpsPct=t.gps2025>0?pctOf(t.gps2026,t.gps2025):'';
   t.cfidpPct=pctOf(t.cfidp26,t.cfidp25);
   t.adssPct=t.adss25>0?pctOf(t.adss26,t.adss25):'';
   t.agriAgraPct=t.agriAgra25>0?pctOf(t.agriAgra,t.agriAgra25):unmeasuredPct(t.agriAgra);
-t.regularPct=t.regular25>0?pctOf(t.regular,t.regular25):unmeasuredPct(t.regular);
+t.regularPct=t.regular25>0?pctOf(t.regular,t.regular25):unmeasuredRegular(t.regular);
 t.overall=overallFor(t);
   return t;
 }
@@ -418,7 +490,21 @@ function pctOf(ytd,tgt){
   if(!(tgt>0))return'';
   return Math.min((ytd/tgt)*100,100).toFixed(1);
 }
-// Graduated credit for unmeasured (no-target) AGRI-AGRA / Regular accomplishment (max 75%: 100% needs a real target)
+// Effective Farmers target: an Excel/manual total is authoritative over the crop sum
+function effFarmersTgt(d){
+  const s=(d.rice25||0)+(d.corn25||0)+(d.hvc25||0)+(d.liv25||0)+(d.fsh25||0)+(d.nca25||0);
+  if(d.farmersTgtManual&&(d.totalFarmers25>0))return d.totalFarmers25;
+  return s;
+}
+// Graduated credit for unmeasured (no-target) Regular accomplishment (max 80%: 100% needs a real target)
+function unmeasuredRegular(ytd){
+  if(!(ytd>0))return'';
+  if(ytd<0.0001)return'20.0';
+  if(ytd<0.010)return'40.0';
+  if(ytd<0.100)return'60.0';
+  return'80.0';
+}
+// Graduated credit for unmeasured (no-target) AGRI-AGRA accomplishment (max 75%: 100% needs a real target)
 function unmeasuredPct(ytd){
   if(!(ytd>0))return'';
   if(ytd<0.01)return'25.0';
@@ -429,7 +515,7 @@ function fmtNum(n){
   if(n===undefined||n===null||n==='')return'';
   const v=typeof n==='string'?parseFloat(n):n;
   if(isNaN(v)||!isFinite(v)||v===0)return'';
-  return v.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2});
+  return v.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:4});
 }
 function fmtPct(v){
   if(v===''||v===undefined||v===null)return'';
@@ -498,6 +584,7 @@ function openLockModal(){
   m.classList.add('show');
   const inp=document.getElementById('lockInput');
   inp.value='';
+  inp.type='password';document.getElementById('lockShow').checked=false;
   setTimeout(()=>inp.focus(),50);
 }
 function closeLockModal(){
@@ -506,7 +593,7 @@ function closeLockModal(){
 }
 function submitLockModal(){
   const v=document.getElementById('lockInput').value;
-  if(v!==PASSCODE){toast('Wrong passcode','error');return;}
+  if(gateRole(v)===null){toast('Wrong passcode','error');return;}
   closeLockModal();
   setLocked(false);
 }
@@ -575,6 +662,7 @@ function loadShared(){
     if(!chk.ok){toast('Shared data invalid: '+chk.reason,'error');return;}
     if(!confirm('Load shared dataset'+(chk.exportedAt?' from '+chk.exportedAt:'')+' ('+chk.count+' records)? Current entries will be replaced.'))return;
     Object.keys(obj.data).forEach(k=>{Object.assign(data[k],obj.data[k]);});
+    Object.keys(obj.data).forEach(k=>{if(data[k])migrateRow(data[k]);});
     saveData();recalcDerived();render();populateTopBar();
     toast('Shared dataset loaded ('+chk.count+' records)','success');
   }).catch(()=>toast('Shared data unavailable','error'));
@@ -591,10 +679,180 @@ document.getElementById('restoreInput').addEventListener('change',async function
     if(!chk.ok){toast('Restore failed: '+chk.reason,'error');return;}
     if(!confirm('Replace current data with the backup'+(chk.exportedAt?' from '+chk.exportedAt:'')+' ('+chk.count+' records)?'))return;
     Object.keys(obj.data).forEach(k=>{Object.assign(data[k],obj.data[k]);});
+    Object.keys(obj.data).forEach(k=>{if(data[k])migrateRow(data[k]);});
     saveData();recalcDerived();render();populateTopBar();
     toast('Restored '+chk.count+' records','success');
   }catch(err){toast('Restore failed: '+err.message,'error');}
 });
+
+// --- EXCEL TARGET IMPORT (.xlsx, first sheet) ---
+function normExcel(s){return String(s||'').trim().toLowerCase().replace(/\./g,'').replace(/\s+city$/,'').replace(/\s+/g,' ');}
+function numExcel(v){
+  if(typeof v==='number'&&isFinite(v))return v;
+  if(typeof v==='string'){const n=parseFloat(v.replace(/,/g,'').trim());if(isFinite(n))return n;}
+  return null;
+}
+// Maps a header to a data field (null = ignore column).
+// Tolerant: case/punctuation/whitespace-insensitive, optional trailing year and TGT/TARGET.
+function excelField(h){
+  let k=String(h||'').trim().toLowerCase().replace(/[._-]+/g,' ').replace(/\s+/g,' ');
+  if(k==='municipality'||k==='municipalities'||k==='muni'||k==='city municipality'||k==='city')return'muni';
+  if(k==='underwriter'||k==='uw'||k==='assigned underwriter')return'uw';
+  // Strip a trailing year ONLY when what remains still says TGT/TARGET (so 'GPS 2026' never hijacks the GPS target)
+  const ym=k.match(/^(.*)\s+20\d\d$/);
+  if(ym&&/\s+(tgt|target|targets)$/.test(ym[1]))k=ym[1].trim();
+  k=k.replace(/\s+(tgt|target|targets)$/,'').trim();
+  if(k==='farmers'||k==='nof'||k==='no of farmers'||k==='number of farmers'||k==='total farmers')return'totalFarmers25';
+  if(k==='gps')return'gps2025';
+  if(k==='cfidp'||k==='cfitf'||k==='cfitf ci')return'cfidp25';
+  if(k==='agri agra'||k==='agriagra')return'agriAgra25';
+  if(k==='regular')return'regular25';
+  return null;
+}
+// Matches normalized row objects to municipality keys. Underwriter is used for matching only, never written. No writes here.
+function matchExcelRows(rows){
+  const byMuni={};
+  Object.entries(provinces).forEach(([prov,munis])=>{munis.forEach(muni=>{
+    const k=normExcel(muni);(byMuni[k]=byMuni[k]||[]).push({prov,muni});
+  });});
+  const assign=[],skipped=[],unmappedSeen={};
+  (rows||[]).forEach(r=>{
+    const row={};
+    Object.keys(r||{}).forEach(h=>{const f=excelField(h);if(f&&row[f]===undefined)row[f]=r[h];else if(!f&&h&&!/^__empty/i.test(String(h)))unmappedSeen[h]=1;});
+    if(row.muni===undefined||String(row.muni).trim()==='')return;
+    const cands=byMuni[normExcel(row.muni)]||[];
+    let pick=null;
+    if(cands.length===1)pick=cands[0];
+    else if(cands.length>1&&row.uw!==undefined){
+      const uw=normExcel(row.uw);
+      const hit=cands.filter(c=>normExcel((data[c.prov+'||'+c.muni+'||1']||{}).underwriter)===uw);
+      if(hit.length===1)pick=hit[0];
+    }
+    if(!pick){skipped.push(String(row.muni).trim());return;}
+    const key=pick.prov+'||'+pick.muni+'||1';
+    const vals={};
+    ['gps2025','cfidp25','agriAgra25','regular25','totalFarmers25'].forEach(f=>{
+      if(row[f]!==undefined){const n=numExcel(row[f]);if(n!==null)vals[f]=Math.round(n*10000)/10000;}
+    });
+    if(!Object.keys(vals).length){skipped.push(String(row.muni).trim()+' (no values)');return;}
+    const uwNow=(data[key]||{}).underwriter||'(Unassigned)';
+    assign.push({key,prov:pick.prov,muni:pick.muni,uw:uwNow,vals});
+  });
+  return {assign,skipped,unmapped:Object.keys(unmappedSeen)};
+}
+// Writes matched assignments (single write path for both Excel import and Check-Apply)
+function commitExcelRows(assign){
+  let matched=0;
+  (assign||[]).forEach(a=>{
+    const d=data[a.key];if(!d)return;
+    Object.keys(a.vals||{}).forEach(f=>{d[f]=a.vals[f];});
+    if(a.vals.totalFarmers25!==undefined)d.farmersTgtManual=true;
+    matched++;
+  });
+  if(matched){saveData();recalcDerived();render();populateTopBar();}
+  return matched;
+}
+// Applies normalized row objects; underwriter is used for matching only, never written. ADSS untouched.
+function applyExcelRows(rows){
+  const m=matchExcelRows(rows);
+  const matched=commitExcelRows(m.assign);
+  return {matched,skipped:m.skipped,unmapped:m.unmapped};
+}
+const excelFieldLabels={totalFarmers25:'Farmers Tgt',gps2025:'GPS Tgt',cfidp25:'CFIDP Tgt',agriAgra25:'AGRI-AGRA Tgt',regular25:'Regular Tgt'};
+function escHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+// Compares assignments against current app values (4-decimal). No writes here.
+function diffExcelRows(assign){
+  const diffs=[];let same=0,compared=0;
+  (assign||[]).forEach(a=>{
+    const d=data[a.key]||{};
+    Object.keys(a.vals||{}).forEach(f=>{
+      compared++;
+      const ev=a.vals[f];
+      const av=d[f];
+      const an=(typeof av==='number'&&isFinite(av))?Math.round(av*10000)/10000:null;
+      if(an===ev){same++;return;}
+      diffs.push({prov:a.prov,muni:a.muni,uw:a.uw,field:f,label:excelFieldLabels[f]||f,excel:ev,app:an===null?'—':an});
+    });
+  });
+  return {diffs,same,compared};
+}
+let excelMode='apply',pendingExcel=null;
+function doExcelImport(){
+  excelMode='apply';document.getElementById('excelInput').click();
+}
+function doExcelCheck(){
+  excelMode='check';document.getElementById('excelInput').click();
+}
+function openCheckModal(m){
+  pendingExcel=m.assign||[];
+  const d=diffExcelRows(pendingExcel);
+  document.getElementById('checkSummary').textContent=
+    d.compared+' cells compared • '+d.same+' match • '+d.diffs.length+' differ'+(m.skipped.length?' • '+m.skipped.length+' rows skipped':'');
+  document.getElementById('checkBody').innerHTML=d.diffs.length?d.diffs.map(x=>'<tr><td>'+escHtml(x.muni)+'</td><td>'+escHtml(x.prov)+'</td><td>'+escHtml(x.uw)+'</td><td>'+escHtml(x.label)+'</td><td class="num">'+x.excel+'</td><td class="num">'+x.app+'</td></tr>').join(''):'<tr><td colspan="6" style="text-align:center;color:var(--muted)">Everything matches — nothing to apply.</td></tr>';
+  document.getElementById('checkSkipped').textContent=(m.skipped.length?('Skipped: '+m.skipped.join(', ')):'')+((m.unmapped&&m.unmapped.length)?((m.skipped.length?' | ':'')+'Ignored columns: '+m.unmapped.join(', ')):'');
+  document.getElementById('checkModal').classList.add('show');
+}
+function closeCheckModal(){
+  pendingExcel=null;
+  document.getElementById('checkModal').classList.remove('show');
+}
+document.getElementById('excelInput').addEventListener('change',function(e){
+  const file=e.target.files[0];e.target.value='';
+  if(!file)return;
+  if(typeof XLSX==='undefined'){toast('Excel import requires internet (SheetJS)','error');return;}
+  document.getElementById('loading').classList.add('show');
+  try{
+    const reader=new FileReader();
+    reader.onload=function(ev){
+      try{
+        const wb=XLSX.read(ev.target.result,{type:'array'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+        if(!rows.length){toast('Excel sheet is empty','error');return;}
+        document.getElementById('loading').classList.remove('show');
+        if(excelMode==='check'){openCheckModal(matchExcelRows(rows));return;}
+        const res=applyExcelRows(rows);
+        let msg='Excel import: '+res.matched+' updated';
+        if(res.skipped.length)msg+=', '+res.skipped.length+' skipped ('+res.skipped.slice(0,5).join(', ')+(res.skipped.length>5?'…':'')+')';
+        if(res.unmapped&&res.unmapped.length)msg+='; ignored columns: '+res.unmapped.slice(0,5).join(', ')+(res.unmapped.length>5?'…':'');
+        toast(msg,(res.skipped.length||(res.unmapped&&res.unmapped.length))?'info':'success');
+      }catch(err){toast('Excel error: '+err.message,'error');}
+      document.getElementById('loading').classList.remove('show');
+    };
+    reader.onerror=function(){document.getElementById('loading').classList.remove('show');toast('Excel read failed','error');};
+    reader.readAsArrayBuffer(file);
+  }catch(err){document.getElementById('loading').classList.remove('show');toast('Excel error: '+err.message,'error');}
+});
+document.getElementById('checkCancel').addEventListener('click',closeCheckModal);
+document.getElementById('checkModal').addEventListener('click',function(e){if(e.target===this)closeCheckModal();});
+document.getElementById('checkApply').addEventListener('click',function(){
+  const n=commitExcelRows(pendingExcel||[]);
+  closeCheckModal();
+  toast('Excel applied: '+n+' updated','success');
+});
+document.getElementById('disOk').addEventListener('click',function(){
+  document.getElementById('disclaimerModal').classList.remove('show');
+});
+// --- ENTRY GATE (admin now; viewer codes fill VIEW_PASSWORDS later, same rights) ---
+const ADMIN_PASSWORD='PCICRegion10';
+const VIEW_PASSWORDS=[];
+function gateRole(v){
+  if(v===ADMIN_PASSWORD)return'admin';
+  if(VIEW_PASSWORDS.indexOf(v)>=0)return'viewer';
+  return null;
+}
+function submitGate(){
+  const v=document.getElementById('gateInput').value;
+  if(gateRole(v)===null){toast('Wrong password','error');return;}
+  document.getElementById('gateModal').classList.remove('show');
+  setLocked(false);
+}
+document.getElementById('gateOk').addEventListener('click',submitGate);
+document.getElementById('gateInput').addEventListener('keydown',function(e){
+  if(e.key==='Enter')submitGate();
+});
+document.getElementById('gateShow').addEventListener('change',function(){document.getElementById('gateInput').type=this.checked?'text':'password';});
+document.getElementById('lockShow').addEventListener('change',function(){document.getElementById('lockInput').type=this.checked?'text':'password';});
 
 // --- UPDATE TOTALS (with formatting) ---
 function updateTotals(){
@@ -619,6 +877,20 @@ function updateTotals(){
   document.querySelectorAll('[data-grand-total][data-col="overall"]').forEach(el=>{
     el.className='rating rating-total '+overallClass(el.textContent);
   });
+  // Keep province breakdown rows + top-bar stats live on every edit (same formatting as build)
+  const pct6=['gpsPct','cfidpPct','adssPct','agriAgraPct','regularPct','totalPct'];
+  document.querySelectorAll('[data-prov-total]').forEach(el=>{
+    const t=getTotals(el.dataset.provTotal);
+    const col=el.dataset.col;
+    const v=t[col];
+    el.textContent=(col==='totalFarmers'||col==='totalFarmers25')?fmtNum(v):((pctCols.includes(col)||col==='overall')?fmtPct(v):fmtNum(v));
+    el.classList.remove('pct-high','pct-mid','pct-low');
+    if(col!=='overall'&&pct6.includes(col)){const pc=pctClass(v);if(pc)el.classList.add(pc);}
+  });
+  const sf=document.getElementById('statFarmers');
+  if(sf){let tf=0;Object.keys(data).forEach(k=>{tf+=data[k].totalFarmers||0;});sf.textContent=fmtNum(tf);}
+  const so=document.getElementById('statOverall');
+  if(so)so.textContent=(getGrand().overall||'-')+'%';
   const rankEl=document.getElementById('rankingSection');
   if(rankEl)rankEl.outerHTML=buildRankingHTML(rankSortCol,rankSortDir);
   const dRankEl=document.getElementById('detailRankingSection');
@@ -653,13 +925,14 @@ function render(){
     const totalRows=items.length;
     const totals=sumItems(items);
     const itemsJson=JSON.stringify(items).replace(/"/g,'&quot;');
-    html+=`<div class="province-section" data-uw="${uw.replace(/"/g,'')}"><h2>Underwriter: ${uw} <span style="font-weight:400;font-size:.8rem;opacity:.8">(${items.length})</span></h2><div class="table-wrapper"><table>
+    html+=`<div class="province-section" data-uw="${escHtml(uw)}"><h2>Underwriter: ${escHtml(uw)} <span style="font-weight:400;font-size:.8rem;opacity:.8">(${items.length})</span></h2><div class="table-wrapper"><table>
 <thead><tr><th rowspan="2">Province</th><th class="muni-col main-sort" rowspan="2" data-ms="muni">Municipality${mainSortCol==='muni'?(mainSortDir==='asc'?' ▲':' ▼'):''}</th>`;
-    colGroups.forEach(g=>{html+=`<th colspan="${g.cols.length}">${g.label}</th>`});
+    colGroups.forEach(g=>{html+=`<th colspan="${g.cols.length}"${g.label==='Crops'?' class="cc-crops-g"':''}>${g.label}</th>`});
     html+=`</tr><tr>`;
     columns.forEach(c=>{
       const cls=['main-sort'];
       if(['totalFarmers','cfidp26','adss26','agriAgra','regular','gps2026'].includes(c))cls.push('bl');
+      if(CROP_COLS.includes(c))cls.push('cc-crops');
       if(['rice25','corn25','hvc25','liv25','fsh25','nca25','totalFarmers25','cfidp25','adss25','agriAgra25','regular25','gps2025'].includes(c))cls.push('tgt-col');
       html+=`<th class="${cls.join(' ')}" data-ms="${c}">${colLabels[c]}${mainSortCol===c?(mainSortDir==='asc'?' ▲':' ▼'):''}</th>`;
     });
@@ -682,7 +955,7 @@ function render(){
     rows.forEach(({prov,muni},mIdx)=>{
       const key=`${prov}||${muni}||1`;
       const rowClass=mIdx%2===0?'even':'odd';
-      const searchText=(prov+' '+muni+' '+uw).replace(/"/g,'').toLowerCase();
+      const searchText=(prov+' '+muni+' '+escHtml(uw)).replace(/"/g,'').toLowerCase();
       html+=`<tr class="${rowClass}" data-search="${searchText}">`;
       if(!flatProv&&mIdx===0)html+=`<td class="muni-name" rowspan="${totalRows}">${prov}</td>`;
       else if(flatProv)html+=`<td class="muni-name">${prov}</td>`;
@@ -694,6 +967,7 @@ function render(){
         const cls=[];
         if(bl)cls.push('bl');
         if(tgt)cls.push('tgt-col');
+        if(CROP_COLS.includes(c))cls.push('cc-crops');
         const cl=cls.length?' class="'+cls.join(' ')+'"':'';
         if(c==='gpsPct'||c==='cfidpPct'||c==='adssPct'||c==='agriAgraPct'||c==='regularPct'||c==='totalPct'||c==='overall'){
           const val=data[key][c];
@@ -704,11 +978,11 @@ function render(){
             html+=`<td${cl}><span class="pct-val" data-pct="${key}" data-col="${c}">${fmtPct(val)}</span></td>`;
           }
         }else if(c==='underwriter'){
-          html+=`<td><input type="text" class="uw-input" data-key="${key}" data-col="underwriter" value="${data[key].underwriter||''}" placeholder="Name"></td>`;
+          html+=`<td><input type="text" class="uw-input" data-key="${key}" data-col="underwriter" value="${escHtml(data[key].underwriter||'')}" placeholder="Name"></td>`;
         }else if(tgt){
-          html+=`<td${cl}><input type="number" step="0.01" data-key="${key}" data-col="${c}" value="${data[key][c]||''}" placeholder="0"></td>`;
+          html+=`<td${cl}><input type="number" min="0" step="0.0001" data-key="${key}" data-col="${c}" value="${data[key][c]||''}" placeholder="0"></td>`;
         }else{
-          html+=`<td${cl}><input type="number" step="0.01" data-key="${key}" data-col="${c}" value="${data[key][c]||''}" placeholder="0"></td>`;
+          html+=`<td${cl}><input type="number" min="0" step="0.0001" data-key="${key}" data-col="${c}" value="${data[key][c]||''}" placeholder="0"></td>`;
         }
       });
       html+=`</tr>`;
@@ -720,6 +994,7 @@ function render(){
         const display=c==='totalFarmers'||c==='totalFarmers25'?fmtNum(val):(c==='overall'?fmtPct(val):(pctCols.includes(c)?fmtPct(val):fmtNum(val)));
         const cls=[];
         if(['totalFarmers','cfidp26','adss26','agriAgra','regular','gps2026'].includes(c))cls.push('bl');
+      if(CROP_COLS.includes(c))cls.push('cc-crops');
         if(['rice25','corn25','hvc25','liv25','fsh25','nca25','totalFarmers25','cfidp25','adss25','agriAgra25','regular25','gps2025'].includes(c))cls.push('tgt-col');
         html+=`<td${cls.length?' class="'+cls.join(' ')+'"':''}><strong data-uw-items="${itemsJson}" data-col="${c}"${c==='overall'?' class="rating rating-total '+overallClass(val)+'"':''}>${display}</strong></td>`;
       }
@@ -730,12 +1005,13 @@ function render(){
   const gt=getGrand();
   html+=`<div class="grand-total"><h2>Grand Total</h2><div class="table-wrapper"><table>
 <thead><tr><th rowspan="2">Province</th>`;
-  colGroups.forEach(g=>{html+=`<th colspan="${g.cols.length}">${g.label}</th>`});
+  colGroups.forEach(g=>{html+=`<th colspan="${g.cols.length}"${g.label==='Crops'?' class="cc-crops-g"':''}>${g.label}</th>`});
   html+=`</tr><tr>`;
     columns.forEach(c=>{
       if(c!=='underwriter'){
         const cls=[];
         if(['totalFarmers','cfidp26','adss26','agriAgra','regular','gps2026'].includes(c))cls.push('bl');
+      if(CROP_COLS.includes(c))cls.push('cc-crops');
         if(['rice25','corn25','hvc25','liv25','fsh25','nca25','totalFarmers25','cfidp25','adss25','agriAgra25','regular25','gps2025'].includes(c))cls.push('tgt-col');
         html+=`<th${cls.length?' class="'+cls.join(' ')+'"':''}>${colLabels[c]}</th>`;
       }
@@ -750,9 +1026,10 @@ function render(){
         const display=c==='totalFarmers'||c==='totalFarmers25'?fmtNum(val):(c==='overall'?fmtPct(val):(pctCols.includes(c)?fmtPct(val):fmtNum(val)));
         const cls=[];
         if(['totalFarmers','cfidp26','adss26','agriAgra','regular','gps2026'].includes(c))cls.push('bl');
+      if(CROP_COLS.includes(c))cls.push('cc-crops');
         if(['rice25','corn25','hvc25','liv25','fsh25','nca25','totalFarmers25','cfidp25','adss25','agriAgra25','regular25','gps2025'].includes(c))cls.push('tgt-col');
         if(c!=='overall'&&['gpsPct','cfidpPct','adssPct','agriAgraPct','regularPct','totalPct'].includes(c)){const pc=pctClass(val);if(pc)cls.push(pc);}
-        html+=`<td${cls.length?' class="'+cls.join(' ')+'"':''}>${display}</td>`;
+        html+=`<td${cls.length?' class="'+cls.join(' ')+'"':''} data-prov-total="${prov}" data-col="${c}">${display}</td>`;
       }
     });
     html+=`</tr>`;
@@ -764,6 +1041,7 @@ function render(){
       const display=c==='totalFarmers'||c==='totalFarmers25'?fmtNum(val):(c==='overall'?fmtPct(val):(pctCols.includes(c)?fmtPct(val):fmtNum(val)));
       const cls=[];
       if(['totalFarmers','cfidp26','adss26','agriAgra','regular','gps2026'].includes(c))cls.push('bl');
+      if(CROP_COLS.includes(c))cls.push('cc-crops');
       if(['rice25','corn25','hvc25','liv25','fsh25','nca25','totalFarmers25','cfidp25','adss25','agriAgra25','regular25','gps2025'].includes(c))cls.push('tgt-col');
       html+=`<td${cls.length?' class="'+cls.join(' ')+'"':''}><strong data-grand-total data-col="${c}"${c==='overall'?' class="rating rating-total '+overallClass(val)+'"':''}>${display}</strong></td>`;
     }
@@ -777,6 +1055,9 @@ function render(){
   applyFilter(currentFilter);
   const fsel=document.getElementById('uwFilter');
   if(fsel)fsel.value=currentFilter;
+  // Re-apply live search text across renders (keeps highlight + hiding)
+  const sb=document.getElementById('searchBox');
+  if(sb&&sb.value.trim()!=='')sb.dispatchEvent(new Event('input'));
 }
 
 // --- UNDERWRITER RANKING ---
@@ -803,7 +1084,7 @@ function buildDetailRankingHTML(sCol,sDir){
   });
   h+=`</tr></thead><tbody>`;
   rows.forEach((r,i)=>{
-    h+=`<tr class="${i%2===0?'even':'odd'}"><td><span class="rank-num ${i<3?`rank-${i+1}`:'rank-rest'}">${i+1}</span></td><td class="muni-name" style="font-size:.72rem">${r.uw}</td><td class="muni-name" style="font-size:.75rem">${r.muni}, ${r.prov}</td>`;
+    h+=`<tr class="${i%2===0?'even':'odd'}"><td><span class="rank-num ${i<3?`rank-${i+1}`:'rank-rest'}">${i+1}</span></td><td class="muni-name" style="font-size:.72rem">${escHtml(r.uw)}</td><td class="muni-name" style="font-size:.75rem">${r.muni}, ${r.prov}</td>`;
     cols.forEach(c=>{
       const pct=maxs[c]?(r[c]/maxs[c]*100).toFixed(0):0;
       h+=`<td class="cell-mid"><div class="rank-bar" style="width:${pct}%"></div>${fmtNum(r[c])}</td>`;
@@ -852,7 +1133,7 @@ function buildRankingHTML(sortCol,sortDir){
   h+=`</tr></thead><tbody>`;
   uwRank.forEach((r,i)=>{
     const cls=i<3?`rank-${i+1}`:'rank-rest';
-    h+=`<tr class="${i%2===0?'even':'odd'}"><td><span class="rank-num ${cls}">${i+1}</span></td><td class="muni-name">${r.uw}</td>`;
+    h+=`<tr class="${i%2===0?'even':'odd'}"><td><span class="rank-num ${cls}">${i+1}</span></td><td class="muni-name">${escHtml(r.uw)}</td>`;
     rankKeys.forEach((k,j)=>{
       const val=r.t[k];const pv=parseFloat(val)||0;
       const display=k==='totalFarmers'?fmtNum(val):fmtPct(val);
@@ -893,8 +1174,6 @@ function populateTopBar(){
   });
   const avgOverall=getGrand().overall||'-';
 
-  const uws=Object.keys(Object.assign(...Object.entries(provinces).map(([p,ms])=>ms.reduce((a,m)=>({...a,[m]:data[p+'||'+m+'||1'].underwriter||'(Unassigned)'}),{}))));
-
   const uwSet=new Set();
   Object.entries(provinces).forEach(([p,ms])=>ms.forEach(m=>uwSet.add(data[p+'||'+m+'||1'].underwriter||'(Unassigned)')));
   const uwList=[...uwSet].sort();
@@ -904,7 +1183,7 @@ function populateTopBar(){
     <input type="text" class="search-box" id="searchBox" placeholder="Search municipality or underwriter..." autocomplete="off">
     <select class="filter-select" id="uwFilter">
       <option value="All">All underwriters</option>
-      ${uwList.map(uw=>`<option value="${uw.replace(/"/g,'')}">${uw}</option>`).join('')}
+      ${uwList.map(uw=>`<option value="${escHtml(uw)}">${escHtml(uw)}</option>`).join('')}
     </select>
     <button class="btn btn-outline btn-sm" id="lockBtn">🔒 Locked</button>
     <button class="btn btn-outline btn-sm" id="densityBtn">Compact</button>
@@ -912,12 +1191,14 @@ function populateTopBar(){
     <button class="btn btn-outline btn-sm" id="backupBtn">Backup</button>
     <button class="btn btn-outline btn-sm" id="restoreBtn">Restore</button>
     <button class="btn btn-outline btn-sm" id="sharedBtn">Shared</button>
+    <button class="btn btn-outline btn-sm" id="excelBtn">Excel</button>
+    <button class="btn btn-outline btn-sm" id="checkBtn">Check</button>
     <div class="stats">
       <div class="stat-card"><div class="num">${muniCount}</div><div class="lbl">Municipalities</div></div>
-      <div class="stat-card"><div class="num">${fmtNum(totalFarmers)}</div><div class="lbl">Total Farmers</div></div>
-      <div class="stat-card"><div class="num">${avgOverall}%</div><div class="lbl">Overall (Grand)</div></div>
+      <div class="stat-card"><div class="num" id="statFarmers">${fmtNum(totalFarmers)}</div><div class="lbl">Total Farmers</div></div>
+      <div class="stat-card"><div class="num" id="statOverall">${avgOverall}%</div><div class="lbl">Overall (Grand)</div></div>
     </div>
-    <div class="legend"><strong>Overall Score</strong> = GPS 25% + Total 25% + CFIDP 15% + ADSS 20% + AGRI-AGRA 7.5% + Regular 7.5% &nbsp;•&nbsp; Missing components count as 0 — every row scores &nbsp;•&nbsp; No targets yet → blank • all % capped at 100 &nbsp;•&nbsp; AGRI-AGRA/Regular YTD with no target: &lt;0.01→25%, &lt;0.10→50%, ≥0.10→75% (100% needs a real target)</div>
+    <div class="legend"><strong>Overall Score</strong> = GPS 25% + Total 25% + CFIDP 15% + ADSS 20% + AGRI-AGRA 7.5% + Regular 7.5% &nbsp;•&nbsp; Missing components count as 0 — every row scores &nbsp;•&nbsp; No targets yet → blank • all % capped at 100 &nbsp;•&nbsp; AGRI-AGRA YTD with no target: &lt;0.01→25%, &lt;0.10→50%, ≥0.10→75% (100% needs a real target) &nbsp;•&nbsp; Regular YTD with no target: &lt;0.0001→20%, &lt;0.010→40%, &lt;0.100→60%, ≥0.100→80% (100% needs a real target)</div>
     <div class="verdict-strip"><span class="verdict-chip verdict-pass">CONTRACT RENEWAL ≥80%</span><span class="verdict-chip verdict-cond">3 MONTHS PROBATION 60–79%</span><span class="verdict-chip verdict-fail">RE-HIRE CONDITIONALLY &lt;60%</span></div>`;
   document.getElementById('topBar').innerHTML=html;
 
@@ -953,10 +1234,9 @@ function populateTopBar(){
   document.getElementById('backupBtn').addEventListener('click',backupData);
   document.getElementById('restoreBtn').addEventListener('click',doRestore);
   document.getElementById('sharedBtn').addEventListener('click',loadShared);
-  // Wire up collapsible sections
-  document.querySelectorAll('.province-section h2').forEach(h2=>{
-    h2.addEventListener('click',function(){this.parentElement.classList.toggle('collapsed')});
-  });
+  document.getElementById('excelBtn').addEventListener('click',doExcelImport);
+  document.getElementById('checkBtn').addEventListener('click',doExcelCheck);
+  // Collapsible sections are handled by delegated clicks (survives render)
 }
 
 // --- PDF IMPORT ---
@@ -985,7 +1265,7 @@ document.getElementById('pdfInput').addEventListener('change',async function(e){
     const k1=`${prov}||${muni}||1`;
     const rsbsa=text.match(/RSBSA[\s\S]*?(?=(?:OTHER|CFITF|Date Printed|PROVINCE|$))/i)?.[0]||'';
     // PCIC Regular Programs: Total Premium(6th) - CLTI Premium(6th)
-    let pcicRegularVal=0;
+    let pcicRegularVal=0,pcicHit=false,agriHit=false;
     const pcicReg=text.match(/PCIC\s*Regular\s*Programs[\s\S]*?(?=(?:RSBSA|DAR|Date Printed|PROVINCE|$))/i)?.[0]||'';
     if(pcicReg){
       const pt=pcicReg.match(/TOTAL\s*:?\s*([\d,.\s]+)/i);
@@ -996,7 +1276,7 @@ document.getElementById('pdfInput').addEventListener('change',async function(e){
         if(pnums.length>=6&&cnums.length>=6){
           const totalP=parseFloat(pnums[5].replace(/,/g,''))||0;
           const cltiP=parseFloat(cnums[5].replace(/,/g,''))||0;
-          pcicRegularVal=Math.max(0,totalP-cltiP);
+          pcicHit=true;pcicRegularVal=Math.max(0,totalP-cltiP);
         }
       }
     }
@@ -1011,6 +1291,7 @@ document.getElementById('pdfInput').addEventListener('change',async function(e){
         const nc=rsbsa.match(/NON\s*CROP\s+(\d+(?:[,\.\s]\d+)*)/i);const ncv=nc?parseInt(nc[1].replace(/[^\d]/g,''))||0:0;
         data[k1].rice25=rv;data[k1].corn25=cv;data[k1].hvc25=hv;data[k1].liv25=lv;data[k1].fsh25=fv;data[k1].nca25=ncv;
         data[k1].totalFarmers25=rv+cv+hv+lv+fv+ncv;
+        data[k1].farmersTgtManual=false; // fresh crop targets supersede any manual Excel total
         const gpsMatch=rsbsa.match(/TOTAL:?\s+[\d.]+\s+([\d.]+)/i);
         if(gpsMatch)data[k1].gps2025=parseFloat(gpsMatch[1])||0;
       }
@@ -1056,22 +1337,22 @@ document.getElementById('pdfInput').addEventListener('change',async function(e){
               }
             }
           }
-          data[k1].agriAgra25=Math.max(0,v);
+          agriHit=true;data[k1].agriAgra25=Math.max(0,v);
         }
       }
-      data[k1].gpsPct=data[k1].gps2025>0?pctOf(data[k1].gps2026,data[k1].gps2025):'';
-      data[k1].cfidpPct=pctOf(data[k1].cfidp26,data[k1].cfidp25);
-      data[k1].adssPct=data[k1].adss25>0?pctOf(data[k1].adss26,data[k1].adss25):'';
-      data[k1].agriAgraPct=data[k1].agriAgra25>0&&data[k1].agriAgra>0?pctOf(data[k1].agriAgra,data[k1].agriAgra25):unmeasuredPct(data[k1].agriAgra);
       data[k1].regular25=pcicRegularVal;
-      data[k1].regularPct=data[k1].regular25>0?pctOf(data[k1].regular,data[k1].regular25):unmeasuredPct(data[k1].regular);
-      data[k1].totalPct=data[k1].totalFarmers25>0&&data[k1].totalFarmers>0?pctOf(data[k1].totalFarmers,data[k1].totalFarmers25):'';
-      data[k1].overall=overallFor(data[k1]);
-      ['gps2025','cfidp25','adss25','agriAgra25','regular25'].forEach(c=>{if(typeof data[k1][c]==='number')data[k1][c]=Math.round(data[k1][c]*1000)/1000});
+      ['gps2025','cfidp25','adss25','agriAgra25','regular25'].forEach(c=>{if(typeof data[k1][c]==='number')data[k1][c]=Math.round(data[k1][c]*10000)/10000});
+      recalcDerived();
       saveData();render();
       populateTopBar();
       document.getElementById('loading').classList.remove('show');
-      toast(`Target: TF=${data[k1].totalFarmers25} GPS=${data[k1].gps2025} CF=${data[k1].cfidp25} AD=${data[k1].adss25} AG=${data[k1].agriAgra25} R=${data[k1].regular25}`,'success');
+      const missT=[];
+      if(!rsbsa)missT.push('RSBSA');
+      if(!cfitf)missT.push('CFITF');
+      if(!cl)missT.push('CLTI');
+      if(!agriHit)missT.push('AGRI-AGRA');
+      if(!pcicHit)missT.push('Regular');
+      toast(`Target: TF=${data[k1].totalFarmers25} GPS=${data[k1].gps2025} CF=${data[k1].cfidp25} AD=${data[k1].adss25} AG=${data[k1].agriAgra25} R=${data[k1].regular25}`+(missT.length?`; missing: ${missT.join(', ')}`:''),missT.length?'info':'success');
     } else {
       // Import into current year columns (existing behavior)
       if(rsbsa){
@@ -1122,23 +1403,23 @@ document.getElementById('pdfInput').addEventListener('change',async function(e){
               }
             }
           }
-          data[k1].agriAgra=Math.max(0,v);
+          agriHit=true;data[k1].agriAgra=Math.max(0,v);
         }
       }
       data[k1].totalFarmers=(data[k1].rice||0)+(data[k1].corn||0)+(data[k1].hvc||0)+(data[k1].fsh||0)+(data[k1].liv||0)+(data[k1].nca||0);
-      data[k1].gpsPct=data[k1].gps2025>0?pctOf(data[k1].gps2026,data[k1].gps2025):'';
-      data[k1].cfidpPct=pctOf(data[k1].cfidp26,data[k1].cfidp25);
-      data[k1].adssPct=data[k1].adss25>0?pctOf(data[k1].adss26,data[k1].adss25):'';
-      data[k1].agriAgraPct=data[k1].agriAgra25>0&&data[k1].agriAgra>0?pctOf(data[k1].agriAgra,data[k1].agriAgra25):unmeasuredPct(data[k1].agriAgra);
       data[k1].regular=pcicRegularVal;
-      data[k1].regularPct=data[k1].regular25>0?pctOf(data[k1].regular,data[k1].regular25):unmeasuredPct(data[k1].regular);
-      data[k1].totalPct=data[k1].totalFarmers25>0?pctOf(data[k1].totalFarmers,data[k1].totalFarmers25):'';
-      data[k1].overall=overallFor(data[k1]);
-      ['gps2026','cfidp26','adss26','agriAgra','regular'].forEach(c=>{if(typeof data[k1][c]==='number')data[k1][c]=Math.round(data[k1][c]*1000)/1000});
+      ['gps2026','cfidp26','adss26','agriAgra','regular'].forEach(c=>{if(typeof data[k1][c]==='number')data[k1][c]=Math.round(data[k1][c]*10000)/10000});
+      recalcDerived();
       saveData();render();
       populateTopBar();
       document.getElementById('loading').classList.remove('show');
-      toast(`Imported 2026 for ${muni}: GPS=${data[k1].gps2026} CF=${data[k1].cfidp26} AD=${data[k1].adss26} AG=${data[k1].agriAgra} R=${data[k1].regular}`,'success');
+      const missC=[];
+      if(!rsbsa)missC.push('RSBSA');
+      if(!cfitf)missC.push('CFITF');
+      if(!cl)missC.push('CLTI');
+      if(!agriHit)missC.push('AGRI-AGRA');
+      if(!pcicHit)missC.push('Regular');
+      toast(`Imported 2026 for ${muni}: GPS=${data[k1].gps2026} CF=${data[k1].cfidp26} AD=${data[k1].adss26} AG=${data[k1].agriAgra} R=${data[k1].regular}`+(missC.length?`; missing: ${missC.join(', ')}`:''),missC.length?'info':'success');
     }
   }catch(err){
     document.getElementById('loading').classList.remove('show');
@@ -1150,6 +1431,11 @@ document.getElementById('pdfInput').addEventListener('change',async function(e){
 
 // --- EVENT DELEGATION ---
 document.addEventListener('click',function(e){
+  // Collapsible sections (delegated so it survives render; ranking h2s keep their inline handler)
+  const ch=e.target.closest('.province-section h2');
+  if(ch){ch.parentElement.classList.toggle('collapsed');return;}
+  const gh=e.target.closest('.grand-total h2');
+  if(gh&&!gh.hasAttribute('onclick')){gh.parentElement.classList.toggle('collapsed');return;}
   const btn=e.target.closest('.pdf-btn');
   if(btn){
     if(btn.disabled)return;
@@ -1200,7 +1486,7 @@ const col=e.target.dataset.col;
 if(!key)return;
 if(col==='underwriter'){data[key][col]=e.target.value;saveData();return;}
 const val=Number(e.target.value)||0;
-data[key][col]=Math.round(val*1000)/1000;
+data[key][col]=Math.round(val*10000)/10000;
 let changed=false;
 if(col==='gps2025'||col==='gps2026'){
 data[key].gpsPct=data[key].gps2025>0?pctOf(data[key].gps2026,data[key].gps2025):'';
@@ -1228,7 +1514,7 @@ changed=true;
 }
 // Regular = GPS - CLTI (auto-computed)
 if(col==='regular'||col==='regular25'){
-data[key].regularPct=data[key].regular25>0?pctOf(data[key].regular,data[key].regular25):unmeasuredPct(data[key].regular);
+data[key].regularPct=data[key].regular25>0?pctOf(data[key].regular,data[key].regular25):unmeasuredRegular(data[key].regular);
 const rp=document.querySelector(`[data-pct="${key}"][data-col="regularPct"]`);
 if(rp)rp.textContent=fmtPct(data[key].regularPct);
 changed=true;
@@ -1239,11 +1525,13 @@ if(['rice','corn','hvc','fsh','liv','nca'].includes(col)){
   if(tf)tf.value=data[key].totalFarmers||'';
 }
 if(['rice25','corn25','hvc25','liv25','fsh25','nca25'].includes(col)){
+  data[key].farmersTgtManual=false;
   data[key].totalFarmers25=(data[key].rice25||0)+(data[key].corn25||0)+(data[key].hvc25||0)+(data[key].liv25||0)+(data[key].fsh25||0)+(data[key].nca25||0);
   const tf25=document.querySelector(`input[data-key="${key}"][data-col="totalFarmers25"]`);
   if(tf25)tf25.value=data[key].totalFarmers25||'';
 }
-if(col==='totalFarmers25'||['rice','corn','hvc','fsh','liv','nca','rice25','corn25','hvc25','liv25','fsh25','nca25'].includes(col)){
+if(col==='totalFarmers25'){data[key].farmersTgtManual=true;}
+if(col==='totalFarmers'||col==='totalFarmers25'||['rice','corn','hvc','fsh','liv','nca','rice25','corn25','hvc25','liv25','fsh25','nca25'].includes(col)){
 data[key].totalPct=data[key].totalFarmers25>0?pctOf(data[key].totalFarmers,data[key].totalFarmers25):'';
 const tp=document.querySelector(`[data-pct="${key}"][data-col="totalPct"]`);
 if(tp)tp.textContent=fmtPct(data[key].totalPct);
