@@ -308,15 +308,19 @@ Object.entries(provinces).forEach(([prov,munis])=>{
   });
 });
 loadSavedData();
-// Seed from the shared online snapshot when this browser has nothing saved yet.
-// Fully guarded: missing file, bad shape, offline, or file:// use fall through silently.
+// Shared published snapshot: always fetched (guarded) for file-vs-file Progress;
+// written into live data only when this browser has nothing saved yet.
+let sharedCache=null;
 try{
   let savedNow=false;
   try{savedNow=!!localStorage.getItem(STORAGE_KEY);}catch(e){}
-  if(!savedNow&&typeof fetch==='function'){
+  if(typeof fetch==='function'){
     fetch('shared-data.json?v='+Date.now()).then(r=>{if(!r.ok)throw 0;return r.json();}).then(obj=>{
       const chk=validateBackup(obj);
       if(!chk.ok)return;
+      sharedCache=obj.data;
+      refreshProgress();
+      if(savedNow)return;
       Object.keys(obj.data).forEach(k=>{Object.assign(data[k],obj.data[k]);});
     Object.keys(obj.data).forEach(k=>{if(data[k])migrateRow(data[k]);});
       saveData();recalcDerived();render();populateTopBar();
@@ -466,22 +470,27 @@ function progressText(nowOv,baseOv){
 function progressForRow(key){
   const qd=quarterData();if(!qd)return{txt:'',cls:''};
   const bd=qd[key];if(!bd)return{txt:'',cls:''};
-  return progressText(data[key].overall,deriveRow(bd).overall);
+  const src=sharedCache||data;
+  const nd=src[key];if(!nd)return{txt:'',cls:''};
+  return progressText(deriveRow(nd).overall,deriveRow(bd).overall);
 }
 function progressForItems(items){
   const qd=quarterData();if(!qd)return{txt:'',cls:''};
-  for(const it of items){if(!qd[it.prov+'||'+it.muni+'||1'])return{txt:'',cls:''};}
-  return progressText(sumItems(items).overall,sumItems(items,qd).overall);
+  const src=sharedCache||data;
+  for(const it of items){const k=it.prov+'||'+it.muni+'||1';if(!qd[k]||!src[k])return{txt:'',cls:''};}
+  return progressText(sumItems(items,src).overall,sumItems(items,qd).overall);
 }
 function progressForProv(prov){
   const qd=quarterData();if(!qd)return{txt:'',cls:''};
-  for(const m of provinces[prov]){if(!qd[prov+'||'+m+'||1'])return{txt:'',cls:''};}
-  return progressText(getTotals(prov).overall,getTotals(prov,qd).overall);
+  const src=sharedCache||data;
+  for(const m of provinces[prov]){const k=prov+'||'+m+'||1';if(!qd[k]||!src[k])return{txt:'',cls:''};}
+  return progressText(getTotals(prov,src).overall,getTotals(prov,qd).overall);
 }
 function progressForGrand(){
   const qd=quarterData();if(!qd)return{txt:'',cls:''};
-  for(const k of Object.keys(data)){if(!qd[k])return{txt:'',cls:''};}
-  return progressText(getGrand().overall,getGrand(qd).overall);
+  const src=sharedCache||data;
+  for(const k of Object.keys(data)){if(!qd[k]||!src[k])return{txt:'',cls:''};}
+  return progressText(getGrand(src).overall,getGrand(qd).overall);
 }
 function paintProg(el,p){
   el.textContent=p.txt;
@@ -495,6 +504,7 @@ function refreshProgress(){
 }
 // Test hook: inject a quarter baseline (used by automated checks; harmless in production)
 function __setQuarter(n,cache){compareQuarter=n;if(cache)quarterCache[n]=cache;try{localStorage.setItem(COMPARE_KEY,compareQuarter);}catch(e){}refreshProgress();}
+function __setShared(map){sharedCache=map;refreshProgress();}
 function refreshQuarterOptions(){
   const sel=document.getElementById('compareSel');
   if(!sel)return;
@@ -1306,7 +1316,7 @@ function populateTopBar(){
       <div class="stat-card"><div class="num" id="statFarmers">${fmtNum(totalFarmers)}</div><div class="lbl">Total Farmers</div></div>
       <div class="stat-card"><div class="num" id="statOverall">${avgOverall}%</div><div class="lbl">Overall (Grand)</div></div>
     </div>
-    <div class="legend"><strong>Overall Score</strong> = GPS 25% + Total 25% + CFIDP 15% + ADSS 20% + AGRI-AGRA 7.5% + Regular 7.5% &nbsp;•&nbsp; Missing components count as 0 — every row scores &nbsp;•&nbsp; No targets yet → blank • all % capped at 100 &nbsp;•&nbsp; AGRI-AGRA YTD with no target: &lt;0.01→25%, &lt;0.10→50%, ≥0.10→75% (100% needs a real target) &nbsp;•&nbsp; Regular YTD with no target: &lt;0.0001→20%, &lt;0.010→40%, &lt;0.100→60%, ≥0.100→80% (100% needs a real target) &nbsp;•&nbsp; Progress compares current Overall vs the selected quarter (Snapshot it, upload q1-q4.json, pick it)</div>
+    <div class="legend"><strong>Overall Score</strong> = GPS 25% + Total 25% + CFIDP 15% + ADSS 20% + AGRI-AGRA 7.5% + Regular 7.5% &nbsp;•&nbsp; Missing components count as 0 — every row scores &nbsp;•&nbsp; No targets yet → blank • all % capped at 100 &nbsp;•&nbsp; AGRI-AGRA YTD with no target: &lt;0.01→25%, &lt;0.10→50%, ≥0.10→75% (100% needs a real target) &nbsp;•&nbsp; Regular YTD with no target: &lt;0.0001→20%, &lt;0.010→40%, &lt;0.100→60%, ≥0.100→80% (100% needs a real target) &nbsp;•&nbsp; Progress = shared-data.json Overall vs the selected quarter (live data when offline)</div>
     <div class="verdict-strip"><span class="verdict-chip verdict-pass">CONTRACT RENEWAL ≥80%</span><span class="verdict-chip verdict-cond">3 MONTHS PROBATION 60–79%</span><span class="verdict-chip verdict-fail">RE-HIRE CONDITIONALLY &lt;60%</span></div>`;
   document.getElementById('topBar').innerHTML=html;
 
