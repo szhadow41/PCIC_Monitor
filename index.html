@@ -271,12 +271,12 @@ const provinces={
 };
 const colGroups=[
 {label:'Crops',cols:['rice','rice25','corn','corn25','hvc','hvc25','fsh','fsh25','liv','liv25','nca','nca25']},
-{label:'Total Farmers',cols:['totalFarmers','totalFarmers25','totalPct']},
-{label:'CFIDP',cols:['cfidp26','cfidp25','cfidpPct']},
-{label:'ADSS',cols:['adss26','adss25','adssPct']},
-{label:'AGRI-AGRA',cols:['agriAgra','agriAgra25','agriAgraPct']},
-{label:'Regular Premium',cols:['regular','regular25','regularPct']},
-{label:'GPS Premium',cols:['gps2026','gps2025','gpsPct']},
+{label:'Total Farmers',cols:['totalFarmers','totalFarmers25','totalPct','totalProg']},
+{label:'CFIDP',cols:['cfidp26','cfidp25','cfidpPct','cfidpProg']},
+{label:'ADSS',cols:['adss26','adss25','adssPct','adssProg']},
+{label:'AGRI-AGRA',cols:['agriAgra','agriAgra25','agriAgraPct','agriProg']},
+{label:'Regular Premium',cols:['regular','regular25','regularPct','regularProg']},
+{label:'GPS Premium',cols:['gps2026','gps2025','gpsPct','gpsProg']},
 {label:'Progress Rating',cols:['overall','progress']}
 ];
 const columns=['rice','rice25','corn','corn25','hvc','hvc25','fsh','fsh25','liv','liv25','nca','nca25','totalFarmers','totalFarmers25','totalPct','cfidp26','cfidp25','cfidpPct','adss26','adss25','adssPct','agriAgra','agriAgra25','agriAgraPct','regular','regular25','regularPct','gps2026','gps2025','gpsPct','overall'];
@@ -467,40 +467,45 @@ function progressText(nowOv,baseOv){
   const v=((n-b)/b)*100;
   return {txt:(v>0?'+':'')+v.toFixed(1)+'%',cls:v>0?'pct-high':(v<0?'pct-low':'')};
 }
-function progressForRow(key){
-  const qd=quarterData();if(!qd)return{txt:'',cls:''};
-  const bd=qd[key];if(!bd)return{txt:'',cls:''};
-  const src=sharedCache||data;
-  const nd=src[key];if(!nd)return{txt:'',cls:''};
-  return progressText(deriveRow(nd).overall,deriveRow(bd).overall);
-}
-function progressForItems(items){
+// Component key -> pct field (drives all seven Progress columns)
+const PROG_COMP={total:'totalPct',cfidp:'cfidpPct',adss:'adssPct',agri:'agriAgraPct',regular:'regularPct',gps:'gpsPct',overall:'overall'};
+const PROG_PCT={totalPct:'total',cfidpPct:'cfidp',adssPct:'adss',agriAgraPct:'agri',regularPct:'regular',gpsPct:'gps',overall:'overall'};
+// Generic progress cell: scope row|uw|prov|grand, component key, ref {k|items|p}
+function progressCell(s,c,ref){
+  const f=PROG_COMP[c];if(!f)return{txt:'',cls:''};
   const qd=quarterData();if(!qd)return{txt:'',cls:''};
   const src=sharedCache||data;
-  for(const it of items){const k=it.prov+'||'+it.muni+'||1';if(!qd[k]||!src[k])return{txt:'',cls:''};}
-  return progressText(sumItems(items,src).overall,sumItems(items,qd).overall);
+  let nowT=null,baseT=null;
+  if(s==='row'){
+    const bd=qd[ref.k];const nd=src[ref.k];if(!bd||!nd)return{txt:'',cls:''};
+    nowT=deriveRow(nd);baseT=deriveRow(bd);
+  }else if(s==='uw'){
+    for(const it of ref.items){const k=it.prov+'||'+it.muni+'||1';if(!qd[k]||!src[k])return{txt:'',cls:''};}
+    nowT=sumItems(ref.items,src);baseT=sumItems(ref.items,qd);
+  }else if(s==='prov'){
+    for(const m of provinces[ref.p]){const k=ref.p+'||'+m+'||1';if(!qd[k]||!src[k])return{txt:'',cls:''};}
+    nowT=getTotals(ref.p,src);baseT=getTotals(ref.p,qd);
+  }else if(s==='grand'){
+    for(const k of Object.keys(data)){if(!qd[k]||!src[k])return{txt:'',cls:''};}
+    nowT=getGrand(src);baseT=getGrand(qd);
+  }else return{txt:'',cls:''};
+  return progressText(nowT[f],baseT[f]);
 }
-function progressForProv(prov){
-  const qd=quarterData();if(!qd)return{txt:'',cls:''};
-  const src=sharedCache||data;
-  for(const m of provinces[prov]){const k=prov+'||'+m+'||1';if(!qd[k]||!src[k])return{txt:'',cls:''};}
-  return progressText(getTotals(prov,src).overall,getTotals(prov,qd).overall);
-}
-function progressForGrand(){
-  const qd=quarterData();if(!qd)return{txt:'',cls:''};
-  const src=sharedCache||data;
-  for(const k of Object.keys(data)){if(!qd[k]||!src[k])return{txt:'',cls:''};}
-  return progressText(getGrand(src).overall,getGrand(qd).overall);
-}
+function progressForRow(key){return progressCell('row','overall',{k:key});}
+function progressForItems(items){return progressCell('uw','overall',{items});}
+function progressForProv(prov){return progressCell('prov','overall',{p:prov});}
+function progressForGrand(){return progressCell('grand','overall',{});}
 function paintProg(el,p){
   el.textContent=p.txt;
   el.className='pct-val'+(p.cls?' '+p.cls:'');
 }
 function refreshProgress(){
-  document.querySelectorAll('[data-prog-row]').forEach(el=>{paintProg(el,progressForRow(el.dataset.progRow));});
-  document.querySelectorAll('[data-prog-uw]').forEach(el=>{try{paintProg(el,progressForItems(JSON.parse(el.dataset.progUw)));}catch(e){}});
-  document.querySelectorAll('[data-prog-prov]').forEach(el=>{paintProg(el,progressForProv(el.dataset.progProv));});
-  document.querySelectorAll('[data-prog-grand]').forEach(el=>{paintProg(el,progressForGrand());});
+  document.querySelectorAll('[data-prog]').forEach(el=>{
+    let p=null;
+    try{p=JSON.parse(el.dataset.prog);}catch(e){}
+    if(!p||!p.s||!p.c){el.textContent='';el.className='pct-val';return;}
+    paintProg(el,progressCell(p.s,p.c,p));
+  });
 }
 // Test hook: inject a quarter baseline (used by automated checks; harmless in production)
 function __setQuarter(n,cache){compareQuarter=n;if(cache)quarterCache[n]=cache;try{localStorage.setItem(COMPARE_KEY,compareQuarter);}catch(e){}refreshProgress();}
@@ -1038,8 +1043,8 @@ function render(){
       if(CROP_COLS.includes(c))cls.push('cc-crops');
       if(['rice25','corn25','hvc25','liv25','fsh25','nca25','totalFarmers25','cfidp25','adss25','agriAgra25','regular25','gps2025'].includes(c))cls.push('tgt-col');
       html+=`<th class="${cls.join(' ')}" data-ms="${c}">${colLabels[c]}${mainSortCol===c?(mainSortDir==='asc'?' ▲':' ▼'):''}</th>`;
+      if(PROG_PCT[c])html+=`<th>Progress</th>`;
     });
-    html+=`<th>Progress</th>`;
     html+=`</tr></thead><tbody>`;
     let rows=items,flatProv=false;
     if(mainSortCol){
@@ -1081,6 +1086,8 @@ function render(){
           }else{
             html+=`<td${cl}><span class="pct-val" data-pct="${key}" data-col="${c}">${fmtPct(val)}</span></td>`;
           }
+          const pck=PROG_PCT[c];
+          if(pck)html+=`<td><span class="pct-val" data-prog='${JSON.stringify({s:'row',c:pck,k:key}).replace(/"/g,'&quot;')}'></span></td>`;
         }else if(c==='underwriter'){
           html+=`<td><input type="text" class="uw-input" data-key="${key}" data-col="underwriter" value="${escHtml(data[key].underwriter||'')}" placeholder="Name"></td>`;
         }else if(tgt){
@@ -1089,7 +1096,6 @@ function render(){
           html+=`<td${cl}><input type="number" min="0" step="0.0001" data-key="${key}" data-col="${c}" value="${data[key][c]||''}" placeholder="0"></td>`;
         }
       });
-      html+=`<td><span class="pct-val" data-prog-row="${key}"></span></td>`;
       html+=`</tr>`;
     });
     html+=`<tr class="subtotal"><td></td><td><strong>Subtotal</strong></td>`;
@@ -1102,9 +1108,10 @@ function render(){
       if(CROP_COLS.includes(c))cls.push('cc-crops');
         if(['rice25','corn25','hvc25','liv25','fsh25','nca25','totalFarmers25','cfidp25','adss25','agriAgra25','regular25','gps2025'].includes(c))cls.push('tgt-col');
         html+=`<td${cls.length?' class="'+cls.join(' ')+'"':''}><strong data-uw-items="${itemsJson}" data-col="${c}"${c==='overall'?' class="rating rating-total '+overallClass(val)+'"':''}>${display}</strong></td>`;
+        const pck=PROG_PCT[c];
+        if(pck)html+=`<td><strong data-prog='${JSON.stringify({s:'uw',c:pck,items:items}).replace(/"/g,'&quot;')}'></strong></td>`;
       }
     });
-    html+=`<td><strong data-prog-uw="${itemsJson}"></strong></td>`;
     html+=`</tr></tbody></table></div></div>`;
   });
 
@@ -1120,9 +1127,9 @@ function render(){
       if(CROP_COLS.includes(c))cls.push('cc-crops');
         if(['rice25','corn25','hvc25','liv25','fsh25','nca25','totalFarmers25','cfidp25','adss25','agriAgra25','regular25','gps2025'].includes(c))cls.push('tgt-col');
         html+=`<th${cls.length?' class="'+cls.join(' ')+'"':''}>${colLabels[c]}</th>`;
+        if(PROG_PCT[c])html+=`<th>Progress</th>`;
       }
     });
-   html+=`<th>Progress</th>`;
    html+=`</tr></thead><tbody>`;
    Object.keys(provinces).forEach(prov=>{
      const t=getTotals(prov);
@@ -1137,9 +1144,10 @@ function render(){
         if(['rice25','corn25','hvc25','liv25','fsh25','nca25','totalFarmers25','cfidp25','adss25','agriAgra25','regular25','gps2025'].includes(c))cls.push('tgt-col');
         if(c!=='overall'&&['gpsPct','cfidpPct','adssPct','agriAgraPct','regularPct','totalPct'].includes(c)){const pc=pctClass(val);if(pc)cls.push(pc);}
         html+=`<td${cls.length?' class="'+cls.join(' ')+'"':''} data-prov-total="${prov}" data-col="${c}">${display}</td>`;
+        const pck=PROG_PCT[c];
+        if(pck)html+=`<td><strong data-prog='${JSON.stringify({s:'prov',c:pck,p:prov}).replace(/"/g,'&quot;')}'></strong></td>`;
       }
     });
-    html+=`<td><strong data-prog-prov="${prov}"></strong></td>`;
     html+=`</tr>`;
   });
   html+=`<tr class="grand-total-row"><td><strong>Grand Total</strong></td>`;
@@ -1152,9 +1160,10 @@ function render(){
       if(CROP_COLS.includes(c))cls.push('cc-crops');
       if(['rice25','corn25','hvc25','liv25','fsh25','nca25','totalFarmers25','cfidp25','adss25','agriAgra25','regular25','gps2025'].includes(c))cls.push('tgt-col');
       html+=`<td${cls.length?' class="'+cls.join(' ')+'"':''}><strong data-grand-total data-col="${c}"${c==='overall'?' class="rating rating-total '+overallClass(val)+'"':''}>${display}</strong></td>`;
-    }
+      const pck=PROG_PCT[c];
+      if(pck)html+=`<td><strong data-prog='${JSON.stringify({s:'grand',c:pck}).replace(/"/g,'&quot;')}'></strong></td>`;
+      }
     });
-   html+=`<td><strong data-prog-grand></strong></td>`;
    html+=`</tr></tbody></table></div></div>`;
   html+=buildRankingHTML(rankSortCol,rankSortDir);
   html+=buildDetailRankingHTML(detailSortCol,detailSortDir);
@@ -1316,7 +1325,7 @@ function populateTopBar(){
       <div class="stat-card"><div class="num" id="statFarmers">${fmtNum(totalFarmers)}</div><div class="lbl">Total Farmers</div></div>
       <div class="stat-card"><div class="num" id="statOverall">${avgOverall}%</div><div class="lbl">Overall (Grand)</div></div>
     </div>
-    <div class="legend"><strong>Overall Score</strong> = GPS 25% + Total 25% + CFIDP 15% + ADSS 20% + AGRI-AGRA 7.5% + Regular 7.5% &nbsp;•&nbsp; Missing components count as 0 — every row scores &nbsp;•&nbsp; No targets yet → blank • all % capped at 100 &nbsp;•&nbsp; AGRI-AGRA YTD with no target: &lt;0.01→25%, &lt;0.10→50%, ≥0.10→75% (100% needs a real target) &nbsp;•&nbsp; Regular YTD with no target: &lt;0.0001→20%, &lt;0.010→40%, &lt;0.100→60%, ≥0.100→80% (100% needs a real target) &nbsp;•&nbsp; Progress = shared-data.json Overall vs the selected quarter (live data when offline)</div>
+    <div class="legend"><strong>Overall Score</strong> = GPS 25% + Total 25% + CFIDP 15% + ADSS 20% + AGRI-AGRA 7.5% + Regular 7.5% &nbsp;•&nbsp; Missing components count as 0 — every row scores &nbsp;•&nbsp; No targets yet → blank • all % capped at 100 &nbsp;•&nbsp; AGRI-AGRA YTD with no target: &lt;0.01→25%, &lt;0.10→50%, ≥0.10→75% (100% needs a real target) &nbsp;•&nbsp; Regular YTD with no target: &lt;0.0001→20%, &lt;0.010→40%, &lt;0.100→60%, ≥0.100→80% (100% needs a real target) &nbsp;•&nbsp; Progress = shared-data.json Overall vs the selected quarter (live data when offline) &nbsp;•&nbsp; Each program group shows its own Progress beside its %</div>
     <div class="verdict-strip"><span class="verdict-chip verdict-pass">CONTRACT RENEWAL ≥80%</span><span class="verdict-chip verdict-cond">3 MONTHS PROBATION 60–79%</span><span class="verdict-chip verdict-fail">RE-HIRE CONDITIONALLY &lt;60%</span></div>`;
   document.getElementById('topBar').innerHTML=html;
 
