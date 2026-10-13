@@ -390,7 +390,9 @@ recalcDerived();
 ['Alubijid','El Salvador City','Gitagum','Initao','Laguindingan','Libertad','Lugait','Manticao','Naawan','Opol'].forEach(m=>{
   data[`Misamis Oriental||${m}||1`].underwriter='Nikki Jo Ello';
 });
-let locked=true;let rankSortCol='',rankSortDir='',detailSortCol='',detailSortDir='';let currentFilter='All',compactMode=false,mainSortCol='',mainSortDir='';
+let locked=true;let rankSortCol='',rankSortDir='',detailSortCol='',detailSortDir='';let currentFilter='All',compactMode=false,mainSortCol='',mainSortDir='',compareQuarter='';
+const COMPARE_KEY='region10_summary_compare';
+try{compareQuarter=localStorage.getItem(COMPARE_KEY)||'';}catch(e){compareQuarter='';}
 function recalcDerived(){
   Object.keys(data).forEach(k=>{
     const d=data[k];
@@ -409,12 +411,12 @@ const t1=data['Bukidnon||Talakag||1'];
 t1.rice=13;t1.corn=385;t1.hvc=10;t1.liv=3;t1.gps2026=1.572;t1.cfidp26=12;t1.adss26=97;t1.agriAgra=85;t1.agriAgra25=100;t1.totalFarmers=13+385+10+0+3+0;recalcDerived();
 
 const pctCols=['gpsPct','cfidpPct','adssPct','agriAgraPct','regularPct','overall','underwriter','totalFarmers','totalPct'];
-function getVal(key,f){return data[key]?data[key][f]||0:0;}
-function sumCols(prov){
+function getVal(key,f,src){src=src||data;return src[key]?src[key][f]||0:0;}
+function sumCols(prov,src){
 const t={};columns.forEach(c=>t[c]=0);
 provinces[prov].forEach(muni=>{
 [1].forEach(r=>{
-columns.forEach(c=>{if(!pctCols.includes(c))t[c]+=getVal(`${prov}||${muni}||${r}`,c)});
+columns.forEach(c=>{if(!pctCols.includes(c))t[c]+=getVal(`${prov}||${muni}||${r}`,c,src)});
 });
 });
 return t;
@@ -436,8 +438,96 @@ function hasAnyTarget(r){
 function overallFor(r){
   return hasAnyTarget(r)?calcOverall(r).toFixed(1):'';
 }
-function getTotals(prov){
-const t=sumCols(prov);
+// --- QUARTER COMPARISON (Progress column): baseline = selected published quarter ---
+const QUARTERS=[{n:'1',label:'1st Quarter'},{n:'2',label:'2nd Quarter'},{n:'3',label:'3rd Quarter'},{n:'4',label:'4th Quarter'}];
+let quarterCache={};
+function quarterFilename(n){return 'q'+n+'.json';}
+function quarterData(){return (compareQuarter&&quarterCache[compareQuarter])?quarterCache[compareQuarter].data:null;}
+// Recompute a full derived row for ANY row-like object with current formulas (no writes)
+function deriveRow(r){
+  const t=Object.assign({},r);
+  t.totalFarmers=(r.rice||0)+(r.corn||0)+(r.hvc||0)+(r.fsh||0)+(r.liv||0)+(r.nca||0);
+  t.totalFarmers25=effFarmersTgt(r);
+  t.totalPct=pctOf(t.totalFarmers,t.totalFarmers25);
+  t.gpsPct=pctOf(r.gps2026,r.gps2025);
+  t.cfidpPct=pctOf(r.cfidp26,r.cfidp25);
+  t.adssPct=pctOf(r.adss26,r.adss25);
+  t.agriAgraPct=(r.agriAgra25>0)?pctOf(r.agriAgra,r.agriAgra25):unmeasuredPct(r.agriAgra);
+  t.regularPct=(r.regular25>0)?pctOf(r.regular,r.regular25):unmeasuredRegular(r.regular);
+  t.overall=overallFor(t);
+  return t;
+}
+function progressText(nowOv,baseOv){
+  const n=parseFloat(nowOv),b=parseFloat(baseOv);
+  if(!isFinite(n)||!isFinite(b)||b===0)return{txt:'',cls:''};
+  const v=((n-b)/b)*100;
+  return {txt:(v>0?'+':'')+v.toFixed(1)+'%',cls:v>0?'pct-high':(v<0?'pct-low':'')};
+}
+function progressForRow(key){
+  const qd=quarterData();if(!qd)return{txt:'',cls:''};
+  const bd=qd[key];if(!bd)return{txt:'',cls:''};
+  return progressText(data[key].overall,deriveRow(bd).overall);
+}
+function progressForItems(items){
+  const qd=quarterData();if(!qd)return{txt:'',cls:''};
+  for(const it of items){if(!qd[it.prov+'||'+it.muni+'||1'])return{txt:'',cls:''};}
+  return progressText(sumItems(items).overall,sumItems(items,qd).overall);
+}
+function progressForProv(prov){
+  const qd=quarterData();if(!qd)return{txt:'',cls:''};
+  for(const m of provinces[prov]){if(!qd[prov+'||'+m+'||1'])return{txt:'',cls:''};}
+  return progressText(getTotals(prov).overall,getTotals(prov,qd).overall);
+}
+function progressForGrand(){
+  const qd=quarterData();if(!qd)return{txt:'',cls:''};
+  for(const k of Object.keys(data)){if(!qd[k])return{txt:'',cls:''};}
+  return progressText(getGrand().overall,getGrand(qd).overall);
+}
+function paintProg(el,p){
+  el.textContent=p.txt;
+  el.className='pct-val'+(p.cls?' '+p.cls:'');
+}
+function refreshProgress(){
+  document.querySelectorAll('[data-prog-row]').forEach(el=>{paintProg(el,progressForRow(el.dataset.progRow));});
+  document.querySelectorAll('[data-prog-uw]').forEach(el=>{try{paintProg(el,progressForItems(JSON.parse(el.dataset.progUw)));}catch(e){}});
+  document.querySelectorAll('[data-prog-prov]').forEach(el=>{paintProg(el,progressForProv(el.dataset.progProv));});
+  document.querySelectorAll('[data-prog-grand]').forEach(el=>{paintProg(el,progressForGrand());});
+}
+// Test hook: inject a quarter baseline (used by automated checks; harmless in production)
+function __setQuarter(n,cache){compareQuarter=n;if(cache)quarterCache[n]=cache;try{localStorage.setItem(COMPARE_KEY,compareQuarter);}catch(e){}refreshProgress();}
+function refreshQuarterOptions(){
+  const sel=document.getElementById('compareSel');
+  if(!sel)return;
+  sel.innerHTML='<option value="">Compare vs: —</option>'+QUARTERS.filter(q=>quarterCache[q.n]).map(q=>`<option value="${q.n}"${compareQuarter===q.n?' selected':''}>${q.label}${quarterCache[q.n].savedAt?' ('+quarterCache[q.n].savedAt.slice(0,10)+')':''}</option>`).join('');
+  sel.value=quarterCache[compareQuarter]?compareQuarter:'';
+  compareQuarter=sel.value;
+  try{localStorage.setItem(COMPARE_KEY,compareQuarter);}catch(e){}
+  refreshProgress();
+}
+function loadQuarters(){
+  if(typeof fetch!=='function')return;
+  QUARTERS.forEach(q=>{
+    fetch(quarterFilename(q.n)+'?v='+Date.now()).then(r=>{if(!r.ok)throw 0;return r.json();}).then(obj=>{
+      const chk=validateBackup(obj);
+      if(!chk.ok)return;
+      quarterCache[q.n]={label:q.label,savedAt:obj.exportedAt||'',data:obj.data};
+      refreshQuarterOptions();
+    }).catch(()=>{});
+  });
+}
+function snapshotQuarter(){
+  const n=(document.getElementById('snapSlot')||{}).value||'1';
+  const payload={app:'region10_summary',version:1,exportedAt:new Date().toISOString(),quarter:parseInt(n,10),data:JSON.parse(JSON.stringify(data))};
+  const blob=new Blob([JSON.stringify(payload)],{type:'application/json;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=quarterFilename(n);
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Quarter '+n+' snapshot downloaded — upload as '+quarterFilename(n),'success');
+}
+function getTotals(prov,src){
+const t=sumCols(prov,src);
 t.totalFarmers=t.rice+t.corn+t.hvc+t.fsh+t.liv+t.nca;
 /* totalFarmers25 already summed above (incl. manual Excel totals); do not recompute */
 t.totalPct=t.totalFarmers25>0?pctOf(t.totalFarmers,t.totalFarmers25):'';
@@ -449,10 +539,10 @@ t.regularPct=t.regular25>0?pctOf(t.regular,t.regular25):unmeasuredRegular(t.regu
 t.overall=overallFor(t);
 return t;
 }
-function getGrand(){
+function getGrand(src){
 const t={};columns.forEach(c=>t[c]=0);
 Object.keys(provinces).forEach(prov=>{
-const pt=sumCols(prov);
+const pt=sumCols(prov,src);
 columns.forEach(c=>{if(!pctCols.includes(c))t[c]+=pt[c]});
 });
 t.totalFarmers=t.rice+t.corn+t.hvc+t.fsh+t.liv+t.nca;
@@ -466,11 +556,11 @@ t.regularPct=t.regular25>0?pctOf(t.regular,t.regular25):unmeasuredRegular(t.regu
 t.overall=overallFor(t);
 return t;
 }
-function sumItems(items){
+function sumItems(items,src){
   const t={};columns.forEach(c=>t[c]=0);
   items.forEach(({prov,muni})=>{
     [1].forEach(r=>{
-      columns.forEach(c=>{if(!pctCols.includes(c))t[c]+=getVal(`${prov}||${muni}||${r}`,c)});
+      columns.forEach(c=>{if(!pctCols.includes(c))t[c]+=getVal(`${prov}||${muni}||${r}`,c,src)});
     });
   });
 t.totalFarmers=t.rice+t.corn+t.hvc+t.fsh+t.liv+t.nca;
@@ -898,6 +988,7 @@ function updateTotals(){
   const dRankEl=document.getElementById('detailRankingSection');
   if(dRankEl)dRankEl.outerHTML=buildDetailRankingHTML(detailSortCol,detailSortDir);
   refreshPctColors();
+  refreshProgress();
 }
 
 // --- RENDER ---
@@ -938,6 +1029,7 @@ function render(){
       if(['rice25','corn25','hvc25','liv25','fsh25','nca25','totalFarmers25','cfidp25','adss25','agriAgra25','regular25','gps2025'].includes(c))cls.push('tgt-col');
       html+=`<th class="${cls.join(' ')}" data-ms="${c}">${colLabels[c]}${mainSortCol===c?(mainSortDir==='asc'?' ▲':' ▼'):''}</th>`;
     });
+    html+=`<th>Progress</th>`;
     html+=`</tr></thead><tbody>`;
     let rows=items,flatProv=false;
     if(mainSortCol){
@@ -987,6 +1079,7 @@ function render(){
           html+=`<td${cl}><input type="number" min="0" step="0.0001" data-key="${key}" data-col="${c}" value="${data[key][c]||''}" placeholder="0"></td>`;
         }
       });
+      html+=`<td><span class="pct-val" data-prog-row="${key}"></span></td>`;
       html+=`</tr>`;
     });
     html+=`<tr class="subtotal"><td></td><td><strong>Subtotal</strong></td>`;
@@ -1001,6 +1094,7 @@ function render(){
         html+=`<td${cls.length?' class="'+cls.join(' ')+'"':''}><strong data-uw-items="${itemsJson}" data-col="${c}"${c==='overall'?' class="rating rating-total '+overallClass(val)+'"':''}>${display}</strong></td>`;
       }
     });
+    html+=`<td><strong data-prog-uw="${itemsJson}"></strong></td>`;
     html+=`</tr></tbody></table></div></div>`;
   });
 
@@ -1018,6 +1112,7 @@ function render(){
         html+=`<th${cls.length?' class="'+cls.join(' ')+'"':''}>${colLabels[c]}</th>`;
       }
     });
+   html+=`<th>Progress</th>`;
    html+=`</tr></thead><tbody>`;
    Object.keys(provinces).forEach(prov=>{
      const t=getTotals(prov);
@@ -1034,6 +1129,7 @@ function render(){
         html+=`<td${cls.length?' class="'+cls.join(' ')+'"':''} data-prov-total="${prov}" data-col="${c}">${display}</td>`;
       }
     });
+    html+=`<td><strong data-prog-prov="${prov}"></strong></td>`;
     html+=`</tr>`;
   });
   html+=`<tr class="grand-total-row"><td><strong>Grand Total</strong></td>`;
@@ -1047,12 +1143,14 @@ function render(){
       if(['rice25','corn25','hvc25','liv25','fsh25','nca25','totalFarmers25','cfidp25','adss25','agriAgra25','regular25','gps2025'].includes(c))cls.push('tgt-col');
       html+=`<td${cls.length?' class="'+cls.join(' ')+'"':''}><strong data-grand-total data-col="${c}"${c==='overall'?' class="rating rating-total '+overallClass(val)+'"':''}>${display}</strong></td>`;
     }
-  });
+    });
+   html+=`<td><strong data-prog-grand></strong></td>`;
    html+=`</tr></tbody></table></div></div>`;
   html+=buildRankingHTML(rankSortCol,rankSortDir);
   html+=buildDetailRankingHTML(detailSortCol,detailSortDir);
   document.getElementById('app').innerHTML=html;
   refreshPctColors();
+  refreshProgress();
   // Restore active dropdown filter across renders (same visible sections as before)
   applyFilter(currentFilter);
   const fsel=document.getElementById('uwFilter');
@@ -1195,12 +1293,20 @@ function populateTopBar(){
     <button class="btn btn-outline btn-sm" id="sharedBtn">Update</button>
     <button class="btn btn-outline btn-sm" id="excelBtn">Excel</button>
     <button class="btn btn-outline btn-sm" id="checkBtn">Check</button>
+    <select class="filter-select" id="snapSlot">
+      <option value="1">Snapshot: 1st Quarter</option>
+      <option value="2">Snapshot: 2nd Quarter</option>
+      <option value="3">Snapshot: 3rd Quarter</option>
+      <option value="4">Snapshot: 4th Quarter</option>
+    </select>
+    <button class="btn btn-outline btn-sm" id="snapBtn">Snapshot</button>
+    <select class="filter-select" id="compareSel"><option value="">Compare vs: —</option>${QUARTERS.filter(q=>quarterCache[q.n]).map(q=>`<option value="${q.n}"${compareQuarter===q.n?' selected':''}>${q.label}${quarterCache[q.n].savedAt?' ('+quarterCache[q.n].savedAt.slice(0,10)+')':''}</option>`).join('')}</select>
     <div class="stats">
       <div class="stat-card"><div class="num">${muniCount}</div><div class="lbl">Municipalities</div></div>
       <div class="stat-card"><div class="num" id="statFarmers">${fmtNum(totalFarmers)}</div><div class="lbl">Total Farmers</div></div>
       <div class="stat-card"><div class="num" id="statOverall">${avgOverall}%</div><div class="lbl">Overall (Grand)</div></div>
     </div>
-    <div class="legend"><strong>Overall Score</strong> = GPS 25% + Total 25% + CFIDP 15% + ADSS 20% + AGRI-AGRA 7.5% + Regular 7.5% &nbsp;•&nbsp; Missing components count as 0 — every row scores &nbsp;•&nbsp; No targets yet → blank • all % capped at 100 &nbsp;•&nbsp; AGRI-AGRA YTD with no target: &lt;0.01→25%, &lt;0.10→50%, ≥0.10→75% (100% needs a real target) &nbsp;•&nbsp; Regular YTD with no target: &lt;0.0001→20%, &lt;0.010→40%, &lt;0.100→60%, ≥0.100→80% (100% needs a real target)</div>
+    <div class="legend"><strong>Overall Score</strong> = GPS 25% + Total 25% + CFIDP 15% + ADSS 20% + AGRI-AGRA 7.5% + Regular 7.5% &nbsp;•&nbsp; Missing components count as 0 — every row scores &nbsp;•&nbsp; No targets yet → blank • all % capped at 100 &nbsp;•&nbsp; AGRI-AGRA YTD with no target: &lt;0.01→25%, &lt;0.10→50%, ≥0.10→75% (100% needs a real target) &nbsp;•&nbsp; Regular YTD with no target: &lt;0.0001→20%, &lt;0.010→40%, &lt;0.100→60%, ≥0.100→80% (100% needs a real target) &nbsp;•&nbsp; Progress compares current Overall vs the selected quarter (Snapshot it, upload q1-q4.json, pick it)</div>
     <div class="verdict-strip"><span class="verdict-chip verdict-pass">CONTRACT RENEWAL ≥80%</span><span class="verdict-chip verdict-cond">3 MONTHS PROBATION 60–79%</span><span class="verdict-chip verdict-fail">RE-HIRE CONDITIONALLY &lt;60%</span></div>`;
   document.getElementById('topBar').innerHTML=html;
 
@@ -1238,6 +1344,11 @@ function populateTopBar(){
   document.getElementById('sharedBtn').addEventListener('click',loadShared);
   document.getElementById('excelBtn').addEventListener('click',doExcelImport);
   document.getElementById('checkBtn').addEventListener('click',doExcelCheck);
+  document.getElementById('snapBtn').addEventListener('click',snapshotQuarter);
+  const cs=document.getElementById('compareSel');
+  cs.value=quarterCache[compareQuarter]?compareQuarter:'';
+  compareQuarter=cs.value;
+  cs.addEventListener('change',function(){compareQuarter=this.value;try{localStorage.setItem(COMPARE_KEY,compareQuarter);}catch(e){}refreshProgress();});
   // Collapsible sections are handled by delegated clicks (survives render)
 }
 
@@ -1566,6 +1677,7 @@ document.addEventListener('change',function(e){
 render();
 populateTopBar();
 document.querySelector('.app').classList.add('locked');
+loadQuarters();
 document.querySelectorAll('.pdf-btn,.pdf-btn25').forEach(b=>b.disabled=true);
 </script>
 </body>
