@@ -115,7 +115,7 @@ tr.subtotal .tgt-col{color:var(--brand)}
 .fc-group{background:rgba(245,158,11,.12)}
 .locked input[type="number"],.locked input[type="text"]{pointer-events:none;opacity:.55}
 .locked .pdf-btn,.locked .pdf-btn25,.locked .pdf-btn:disabled,.locked .pdf-btn25:disabled{display:none}
-.locked #lockBtn,.locked #backupBtn,.locked #restoreBtn,.locked #excelBtn,.locked #checkBtn,.locked #forecastBtn,.locked #mergeFcBtn,.locked #clearFcBtn,.locked #snapBtn,.locked #snapSlot{display:none}
+.locked #lockBtn,.locked #backupBtn,.locked #restoreBtn,.locked #excelBtn,.locked #checkBtn,.locked #forecastBtn,.locked #clearFcBtn,.locked #snapBtn,.locked #snapSlot{display:none}
 /* Pct bar */
 .pct-val{font-weight:600;color:var(--ink);min-width:36px;text-align:right;font-size:.78rem}
 /* Toast */
@@ -290,7 +290,23 @@ const colLabels={underwriter:'Underwriter',rice:'RICE',rice25:'RICE Tgt',corn:'C
 const csvLabels={underwriter:'Underwriter',rice:'RICE',rice25:'RICE Tgt',corn:'CORN',corn25:'CORN Tgt',hvc:'HVC',hvc25:'HVC Tgt',fsh:'FSH',fsh25:'FSH Tgt',liv:'LIV',liv25:'LIV Tgt',nca:'NCA',nca25:'NCA Tgt',totalFarmers:'Farmers',totalFarmers25:"Farmers Tgt",totalPct:'Total %',cfidp26:"CFIDP",cfidp25:"CFIDP Tgt",cfidpPct:'CFIDP%',adss26:"ADSS",adss25:"ADSS Tgt",adssPct:'ADSS%',agriAgra:'AGRI-AGRA',agriAgra25:"AGRI-AGRA Tgt",agriAgraPct:'AGRI-AGRA%',regular:'Regular',regular25:"Regular Tgt",regularPct:'Regular%',gps2026:'GPS',gps2025:'GPS Tgt',gpsPct:'GPS %',overall:'Overall'};
 
 const data={};const STORAGE_KEY='region10_summary_exp';const LEGACY_STORAGE_KEY='region10_summary';
-function saveData(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(data))}catch(e){}}
+// Forecast is session-only: never persist it. Strip fc fields (and legacy merge leftovers) on save.
+function stripForecast(rows){
+  const out={};
+  Object.keys(rows||{}).forEach(k=>{
+    const r=Object.assign({},rows[k]);
+    FC_FIELDS.forEach(f=>delete r[f]);
+    delete r.farmersYtdExtra;
+    out[k]=r;
+  });
+  return out;
+}
+function resetForecastSession(){
+  let n=0;
+  Object.keys(data).forEach(k=>FC_FIELDS.forEach(f=>{if((data[k][f]||0)!==0){data[k][f]=0;n++;}}));
+  return n;
+}
+function saveData(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(stripForecast(data)))}catch(e){}}
 function loadSavedData(){try{
   let s=localStorage.getItem(STORAGE_KEY);
   if(!s){
@@ -299,7 +315,7 @@ function loadSavedData(){try{
       if(legacy){localStorage.setItem(STORAGE_KEY,legacy);s=legacy;}
     }catch(e2){}
   }
-  if(s){const p=JSON.parse(s);Object.keys(p).forEach(k=>{if(data[k])Object.assign(data[k],p[k])})}
+  if(s){const p=JSON.parse(s);Object.keys(p).forEach(k=>{if(data[k])Object.assign(data[k],p[k])});resetForecastSession();}
 }catch(e){}}
 Object.entries(provinces).forEach(([prov,munis])=>{
   munis.forEach(muni=>{
@@ -328,6 +344,7 @@ try{
       if(savedNow)return;
       Object.keys(obj.data).forEach(k=>{Object.assign(data[k],obj.data[k]);});
     Object.keys(obj.data).forEach(k=>{if(data[k])migrateRow(data[k]);});
+      resetForecastSession();
       saveData();recalcDerived();render();populateTopBar();
       toast('Loaded shared dataset ('+chk.count+' records)','success');
     }).catch(()=>{});
@@ -337,7 +354,7 @@ try{
 function migrateRow(d){
 if(!d.farmersTgtManual&&d.totalFarmers25>0&&!d.rice25&&!d.corn25&&!d.hvc25&&!d.liv25&&!d.fsh25&&!d.nca25){const s=(d.rice||0)+(d.corn||0)+(d.hvc||0)+(d.fsh||0)+(d.liv||0)+(d.nca||0);if(s>0){d.rice25=Math.round(d.totalFarmers25*(d.rice||0)/s);d.corn25=Math.round(d.totalFarmers25*(d.corn||0)/s);d.hvc25=Math.round(d.totalFarmers25*(d.hvc||0)/s);d.fsh25=Math.round(d.totalFarmers25*(d.fsh||0)/s);d.liv25=Math.round(d.totalFarmers25*(d.liv||0)/s);d.nca25=d.totalFarmers25-d.rice25-d.corn25-d.hvc25-d.fsh25-d.liv25}else{d.rice25=d.corn25=d.hvc25=d.fsh25=d.liv25=0;d.nca25=d.totalFarmers25}}
 FC_FIELDS.forEach(f=>{if(typeof d[f]!=='number'||!isFinite(d[f]))d[f]=0;});
-if(typeof d.farmersYtdExtra!=='number'||!isFinite(d.farmersYtdExtra))d.farmersYtdExtra=0;
+delete d.farmersYtdExtra;
 }
 Object.keys(data).forEach(k=>migrateRow(data[k]));
 recalcDerived();
@@ -407,7 +424,7 @@ try{compareQuarter=localStorage.getItem(COMPARE_KEY)||'';}catch(e){compareQuarte
 function recalcDerived(){
   Object.keys(data).forEach(k=>{
     const d=data[k];
-    d.totalFarmers=(d.rice||0)+(d.corn||0)+(d.hvc||0)+(d.fsh||0)+(d.liv||0)+(d.nca||0)+(d.farmersYtdExtra||0);
+    d.totalFarmers=(d.rice||0)+(d.corn||0)+(d.hvc||0)+(d.fsh||0)+(d.liv||0)+(d.nca||0);
     d.totalFarmers25=effFarmersTgt(d);
     d.totalPct=d.totalFarmers25>0?pctOf(d.totalFarmers,d.totalFarmers25):'';
     d.gpsPct=d.gps2025>0?pctOf(d.gps2026,d.gps2025):'';
@@ -423,8 +440,6 @@ t1.rice=13;t1.corn=385;t1.hvc=10;t1.liv=3;t1.gps2026=1.572;t1.cfidp26=12;t1.adss
 
 const pctCols=['gpsPct','cfidpPct','adssPct','agriAgraPct','regularPct','overall','underwriter','totalFarmers','totalPct'];
 function getVal(key,f,src){src=src||data;return src[key]?src[key][f]||0:0;}
-function sumExtra(prov,src){let s=0;(provinces[prov]||[]).forEach(muni=>{s+=getVal(`${prov}||${muni}||1`,'farmersYtdExtra',src);});return s;}
-function sumExtraItems(items,src){let s=0;(items||[]).forEach(it=>{s+=getVal(`${it.prov}||${it.muni}||1`,'farmersYtdExtra',src);});return s;}
 function sumCols(prov,src){
 const t={};columns.forEach(c=>t[c]=0);
 provinces[prov].forEach(muni=>{
@@ -459,7 +474,7 @@ function quarterData(){return (compareQuarter&&quarterCache[compareQuarter])?qua
 // Recompute a full derived row for ANY row-like object with current formulas (no writes)
 function deriveRow(r){
   const t=Object.assign({},r);
-  t.totalFarmers=(r.rice||0)+(r.corn||0)+(r.hvc||0)+(r.fsh||0)+(r.liv||0)+(r.nca||0)+(r.farmersYtdExtra||0);
+  t.totalFarmers=(r.rice||0)+(r.corn||0)+(r.hvc||0)+(r.fsh||0)+(r.liv||0)+(r.nca||0);
   t.totalFarmers25=effFarmersTgt(r);
   t.totalPct=pctOf(t.totalFarmers,t.totalFarmers25);
   t.gpsPct=pctOf(r.gps2026,r.gps2025);
@@ -480,7 +495,7 @@ function projectedRow(r){
   p.agriAgra=(r.agriAgra||0)+(r.fcAgri||0);
   p.regular=(r.regular||0)+(r.fcRegular||0);
   const t=deriveRow(p);
-  t.totalFarmers=(p.rice||0)+(p.corn||0)+(p.hvc||0)+(p.fsh||0)+(p.liv||0)+(p.nca||0)+(r.farmersYtdExtra||0)+(r.fcFarmers||0);
+  t.totalFarmers=(p.rice||0)+(p.corn||0)+(p.hvc||0)+(p.fsh||0)+(p.liv||0)+(p.nca||0)+(r.fcFarmers||0);
   t.totalPct=pctOf(t.totalFarmers,t.totalFarmers25);
   t.overall=overallFor(t);
   return t;
@@ -584,7 +599,7 @@ function loadQuarters(){
 }
 function snapshotQuarter(){
   const n=(document.getElementById('snapSlot')||{}).value||'1';
-  const payload={app:'region10_summary',version:1,exportedAt:new Date().toISOString(),quarter:parseInt(n,10),data:JSON.parse(JSON.stringify(data))};
+  const payload={app:'region10_summary',version:1,exportedAt:new Date().toISOString(),quarter:parseInt(n,10),data:JSON.parse(JSON.stringify(stripForecast(data)))};
   const blob=new Blob([JSON.stringify(payload)],{type:'application/json;charset=utf-8'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -595,7 +610,7 @@ function snapshotQuarter(){
 }
 function getTotals(prov,src){
 const t=sumCols(prov,src);
-t.totalFarmers=t.rice+t.corn+t.hvc+t.fsh+t.liv+t.nca+sumExtra(prov,src);
+t.totalFarmers=t.rice+t.corn+t.hvc+t.fsh+t.liv+t.nca;
 /* totalFarmers25 already summed above (incl. manual Excel totals); do not recompute */
 t.totalPct=t.totalFarmers25>0?pctOf(t.totalFarmers,t.totalFarmers25):'';
 t.gpsPct=t.gps2025>0?pctOf(t.gps2026,t.gps2025):'';
@@ -612,7 +627,7 @@ Object.keys(provinces).forEach(prov=>{
 const pt=sumCols(prov,src);
 columns.forEach(c=>{if(!pctCols.includes(c))t[c]+=pt[c]});
 });
-t.totalFarmers=t.rice+t.corn+t.hvc+t.fsh+t.liv+t.nca+Object.keys(provinces).reduce((s,p)=>s+sumExtra(p,src),0);
+t.totalFarmers=t.rice+t.corn+t.hvc+t.fsh+t.liv+t.nca;
 /* totalFarmers25 already summed above (incl. manual Excel totals); do not recompute */
 t.totalPct=t.totalFarmers25>0?pctOf(t.totalFarmers,t.totalFarmers25):'';
 t.gpsPct=t.gps2025>0?pctOf(t.gps2026,t.gps2025):'';
@@ -630,7 +645,7 @@ function sumItems(items,src){
       columns.forEach(c=>{if(!pctCols.includes(c))t[c]+=getVal(`${prov}||${muni}||${r}`,c,src)});
     });
   });
-t.totalFarmers=t.rice+t.corn+t.hvc+t.fsh+t.liv+t.nca+sumExtraItems(items,src);
+t.totalFarmers=t.rice+t.corn+t.hvc+t.fsh+t.liv+t.nca;
 /* totalFarmers25 already summed above (incl. manual Excel totals); do not recompute */
 t.totalPct=t.totalFarmers25>0?pctOf(t.totalFarmers,t.totalFarmers25):'';
   t.gpsPct=t.gps2025>0?pctOf(t.gps2026,t.gps2025):'';
@@ -787,7 +802,7 @@ function exportCSV(){
 
 // --- BACKUP & RESTORE (JSON file) ---
 function buildBackup(){
-  return {app:'region10_summary',version:1,exportedAt:new Date().toISOString(),data:JSON.parse(JSON.stringify(data))};
+  return {app:'region10_summary',version:1,exportedAt:new Date().toISOString(),data:JSON.parse(JSON.stringify(stripForecast(data)))};
 }
 function backupData(){
   const blob=new Blob([JSON.stringify(buildBackup())],{type:'application/json;charset=utf-8'});
@@ -821,6 +836,7 @@ function loadShared(){
     if(!confirm('Load shared dataset'+(chk.exportedAt?' from '+chk.exportedAt:'')+' ('+chk.count+' records)? Current entries will be replaced.'))return;
     Object.keys(obj.data).forEach(k=>{Object.assign(data[k],obj.data[k]);});
     Object.keys(obj.data).forEach(k=>{if(data[k])migrateRow(data[k]);});
+    resetForecastSession();
     saveData();recalcDerived();render();populateTopBar();
     toast('Shared dataset loaded ('+chk.count+' records)','success');
   }).catch(()=>toast('Shared data unavailable','error'));
@@ -838,6 +854,7 @@ document.getElementById('restoreInput').addEventListener('change',async function
     if(!confirm('Replace current data with the backup'+(chk.exportedAt?' from '+chk.exportedAt:'')+' ('+chk.count+' records)?'))return;
     Object.keys(obj.data).forEach(k=>{Object.assign(data[k],obj.data[k]);});
     Object.keys(obj.data).forEach(k=>{if(data[k])migrateRow(data[k]);});
+    resetForecastSession();
     saveData();recalcDerived();render();populateTopBar();
     toast('Restored '+chk.count+' records','success');
   }catch(err){toast('Restore failed: '+err.message,'error');}
@@ -1300,33 +1317,6 @@ function clearForecast(){
   const n=clearForecastData();
   toast(n?'Forecast cleared ('+n+' values)':'No forecast values to clear',n?'success':'info');
 }
-// Permanently add forecast (pending applications) into YTD actuals, then zero the forecast.
-// Progress must stay identical: (YTD + Fc) before == YTD after.
-const FC_ACTUAL={fcGps:'gps2026',fcCfidp:'cfidp26',fcAdss:'adss26',fcAgri:'agriAgra',fcRegular:'regular'};
-function mergeForecastData(){
-  let rows=0,vals=0;
-  Object.keys(data).forEach(k=>{
-    const d=data[k];let hit=false;
-    Object.keys(FC_ACTUAL).forEach(ff=>{
-      const v=d[ff]||0;
-      if(v!==0){d[FC_ACTUAL[ff]]=Math.round(((d[FC_ACTUAL[ff]]||0)+v)*10000)/10000;vals++;hit=true;}
-    });
-    const fr=d.fcFarmers||0;
-    if(fr!==0){d.farmersYtdExtra=Math.round(((d.farmersYtdExtra||0)+fr)*10000)/10000;vals++;hit=true;}
-    if(hit)rows++;
-    FC_FIELDS.forEach(f=>{d[f]=0;});
-  });
-  if(vals){saveData();recalcDerived();render();populateTopBar();}
-  return {rows,vals};
-}
-function mergeForecast(){
-  if(locked){toast('Unlock to merge forecast','error');return;}
-  if(!hasForecast()){toast('No forecast values to merge','info');return;}
-  let rows=0;Object.keys(data).forEach(k=>{if(FC_FIELDS.some(f=>(data[k][f]||0)!==0))rows++;});
-  if(!confirm('Add forecast values into YTD for '+rows+' municipalities? Forecast will be cleared. Take a Backup first if unsure.'))return;
-  const r=mergeForecastData();
-  toast('Merged '+r.vals+' forecast values into YTD ('+r.rows+' municipalities)','success');
-}
 function fcProjPct(p,prog){
   const [af,ff,tf]=prog;
   if(tf==='totalFarmers25')return p.totalPct;
@@ -1402,7 +1392,7 @@ function buildForecastHTML(){
     return {label:uw,totals,fc,proj:projectedAgg(totals,fc)};
   }).sort((a,b)=>(parseFloat(b.proj.overall)||0)-(parseFloat(a.proj.overall)||0));
   const grand=fcGrandAgg();
-  let h=`<div class="grand-total" id="forecastSection"><h2>Forecast Production <span style="font-weight:400;font-size:.8rem;opacity:.7">(pending applications, not yet processed)</span> <button class="btn btn-outline btn-sm" id="mergeFcBtn" style="margin-left:8px" title="Permanently add forecast into YTD, then clear the forecast">Merge to YTD</button> <button class="btn btn-outline btn-sm" id="clearFcBtn" style="margin-left:8px">Clear forecast</button></h2>`;
+  let h=`<div class="grand-total" id="forecastSection"><h2>Forecast Production <span style="font-weight:400;font-size:.8rem;opacity:.7">(pending applications, not yet processed)</span> <button class="btn btn-outline btn-sm" id="clearFcBtn" style="margin-left:8px">Clear forecast</button></h2>`;
   h+=fcTableHTML(provRows,grand);
   h+=`<h3 style="margin:14px 0 6px;font-size:.9rem">Per Underwriter</h3>`;
   h+=fcTableHTML(uwRows,grand);
@@ -1555,7 +1545,7 @@ function populateTopBar(){
       <div class="stat-card"><div class="num" id="statFarmers">${fmtNum(totalFarmers)}</div><div class="lbl">Total Farmers</div></div>
       <div class="stat-card"><div class="num" id="statOverall">${avgOverall}%</div><div class="lbl">Overall (Grand)</div></div>
     </div>
-    <div class="legend"><strong>Overall Score</strong> = GPS 25% + Total 25% + CFIDP 15% + ADSS 20% + AGRI-AGRA 7.5% + Regular 7.5% &nbsp;•&nbsp; Missing components count as 0 — every row scores &nbsp;•&nbsp; No targets yet → blank • all % capped at 100 &nbsp;•&nbsp; AGRI-AGRA YTD with no target: &lt;0.01→25%, &lt;0.10→50%, ≥0.10→75% (100% needs a real target) &nbsp;•&nbsp; Regular YTD with no target: &lt;0.0001→20%, &lt;0.010→40%, &lt;0.100→60%, ≥0.100→80% (100% needs a real target) &nbsp;•&nbsp; Progress = current data (Actual + Forecast) vs the selected quarter &nbsp;•&nbsp; Each program group shows its own Progress beside its % &nbsp;•&nbsp; Progress now-side = Actual + Forecast; Forecast section = pending applications (not yet processed); Merge to YTD commits pending values as actuals</div>
+    <div class="legend"><strong>Overall Score</strong> = GPS 25% + Total 25% + CFIDP 15% + ADSS 20% + AGRI-AGRA 7.5% + Regular 7.5% &nbsp;•&nbsp; Missing components count as 0 — every row scores &nbsp;•&nbsp; No targets yet → blank • all % capped at 100 &nbsp;•&nbsp; AGRI-AGRA YTD with no target: &lt;0.01→25%, &lt;0.10→50%, ≥0.10→75% (100% needs a real target) &nbsp;•&nbsp; Regular YTD with no target: &lt;0.0001→20%, &lt;0.010→40%, &lt;0.100→60%, ≥0.100→80% (100% needs a real target) &nbsp;•&nbsp; Progress = current data (Actual + Forecast) vs the selected quarter &nbsp;•&nbsp; Each program group shows its own Progress beside its % &nbsp;•&nbsp; Progress now-side = Actual + Forecast; Forecast section = pending applications (not yet processed); Forecast is session-only and clears on refresh</div>
     <div class="verdict-strip"><span class="verdict-chip verdict-pass">CONTRACT RENEWAL ≥80%</span><span class="verdict-chip verdict-cond">3 MONTHS PROBATION 60–79%</span><span class="verdict-chip verdict-fail">RE-HIRE CONDITIONALLY &lt;60%</span></div>`;
   document.getElementById('topBar').innerHTML=html;
 
@@ -1769,7 +1759,6 @@ document.getElementById('pdfInput').addEventListener('change',async function(e){
           agriHit=true;data[k1].agriAgra=Math.max(0,v);
         }
       }
-      data[k1].farmersYtdExtra=0;
       data[k1].totalFarmers=(data[k1].rice||0)+(data[k1].corn||0)+(data[k1].hvc||0)+(data[k1].fsh||0)+(data[k1].liv||0)+(data[k1].nca||0);
       data[k1].regular=pcicRegularVal;
       ['gps2026','cfidp26','adss26','agriAgra','regular'].forEach(c=>{if(typeof data[k1][c]==='number')data[k1][c]=Math.round(data[k1][c]*10000)/10000});
@@ -1802,8 +1791,6 @@ document.addEventListener('click',function(e){
   if(gh&&!gh.hasAttribute('onclick')){gh.parentElement.classList.toggle('collapsed');return;}
   const fcb=e.target.closest('#clearFcBtn');
   if(fcb){clearForecast();return;}
-  const fmb=e.target.closest('#mergeFcBtn');
-  if(fmb){mergeForecast();return;}
   const btn=e.target.closest('.pdf-btn');
   if(btn){
     if(btn.disabled)return;
@@ -1888,7 +1875,7 @@ if(rp)rp.textContent=fmtPct(data[key].regularPct);
 changed=true;
 }
 if(['rice','corn','hvc','fsh','liv','nca'].includes(col)){
-  data[key].totalFarmers=(data[key].rice||0)+(data[key].corn||0)+(data[key].hvc||0)+(data[key].fsh||0)+(data[key].liv||0)+(data[key].nca||0)+(data[key].farmersYtdExtra||0);
+  data[key].totalFarmers=(data[key].rice||0)+(data[key].corn||0)+(data[key].hvc||0)+(data[key].fsh||0)+(data[key].liv||0)+(data[key].nca||0);
   const tf=document.querySelector(`input[data-key="${key}"][data-col="totalFarmers"]`);
   if(tf)tf.value=data[key].totalFarmers||'';
 }
