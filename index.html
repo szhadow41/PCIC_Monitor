@@ -450,12 +450,12 @@ columns.forEach(c=>{if(!pctCols.includes(c))t[c]+=getVal(`${prov}||${muni}||${r}
 return t;
 }
 function calcOverall(row){
-const a=parseFloat(row.adssPct)||0;
-const c=parseFloat(row.cfidpPct)||0;
-const g=parseFloat(row.gpsPct)||0;
-const f=parseFloat(row.totalPct)||0;
-const ag=parseFloat(row.agriAgraPct)||0;
-const r=parseFloat(row.regularPct)||0;
+const a=Math.min(parseFloat(row.adssPct)||0,100);
+const c=Math.min(parseFloat(row.cfidpPct)||0,100);
+const g=Math.min(parseFloat(row.gpsPct)||0,100);
+const f=Math.min(parseFloat(row.totalPct)||0,100);
+const ag=Math.min(parseFloat(row.agriAgraPct)||0,100);
+const r=Math.min(parseFloat(row.regularPct)||0,100);
 return (g*0.25)+(f*0.25)+(a*0.20)+(c*0.15)+(ag*0.075)+(r*0.075);
 }
 // Not-started check: any target set across the six components?
@@ -501,8 +501,9 @@ function projectedRow(r){
   return t;
 }
 function progressText(nowOv,baseOv){
-  const n=parseFloat(nowOv),b=parseFloat(baseOv);
-  if(!isFinite(n)||!isFinite(b)||b===0)return{txt:'',cls:''};
+  const n0=parseFloat(nowOv),b0=parseFloat(baseOv);
+  if(!isFinite(n0)||!isFinite(b0)||b0===0)return{txt:'',cls:''};
+  const n=Math.min(n0,100),b=Math.min(b0,100);
   const v=((n-b)/b)*100;
   return {txt:(v>0?'+':'')+v.toFixed(1)+'%',cls:v>0?'pct-high':(v<0?'pct-low':'')};
 }
@@ -658,10 +659,10 @@ t.overall=overallFor(t);
 }
 
 // --- FORMATTING HELPERS ---
-// Capped percentage: '' when no target, max 100.0 (also normalizes CFIDP display)
+// Achievement percentage: '' when no target, true value (may exceed 100); score caps components at 100
 function pctOf(ytd,tgt){
   if(!(tgt>0))return'';
-  return Math.min((ytd/tgt)*100,100).toFixed(1);
+  return ((ytd/tgt)*100).toFixed(1);
 }
 // Effective Farmers target: an Excel/manual total is authoritative over the crop sum
 function effFarmersTgt(d){
@@ -1545,7 +1546,7 @@ function populateTopBar(){
       <div class="stat-card"><div class="num" id="statFarmers">${fmtNum(totalFarmers)}</div><div class="lbl">Total Farmers</div></div>
       <div class="stat-card"><div class="num" id="statOverall">${avgOverall}%</div><div class="lbl">Overall (Grand)</div></div>
     </div>
-    <div class="legend"><strong>Overall Score</strong> = GPS 25% + Total 25% + CFIDP 15% + ADSS 20% + AGRI-AGRA 7.5% + Regular 7.5% &nbsp;•&nbsp; Missing components count as 0 — every row scores &nbsp;•&nbsp; No targets yet → blank • all % capped at 100 &nbsp;•&nbsp; AGRI-AGRA YTD with no target: &lt;0.01→25%, &lt;0.10→50%, ≥0.10→75% (100% needs a real target) &nbsp;•&nbsp; Regular YTD with no target: &lt;0.0001→20%, &lt;0.010→40%, &lt;0.100→60%, ≥0.100→80% (100% needs a real target) &nbsp;•&nbsp; Progress = current data (Actual + Forecast) vs the selected quarter &nbsp;•&nbsp; Each program group shows its own Progress beside its % &nbsp;•&nbsp; Progress now-side = Actual + Forecast; Forecast section = pending applications (not yet processed); Forecast is session-only and clears on refresh</div>
+    <div class="legend"><strong>Overall Score</strong> = GPS 25% + Total 25% + CFIDP 15% + ADSS 20% + AGRI-AGRA 7.5% + Regular 7.5% &nbsp;•&nbsp; Missing components count as 0 — every row scores &nbsp;•&nbsp; No targets yet → blank • Achievement % shows true value (may exceed 100); Overall Score caps each component at 100 &nbsp;•&nbsp; AGRI-AGRA YTD with no target: &lt;0.01→25%, &lt;0.10→50%, ≥0.10→75% (100% needs a real target) &nbsp;•&nbsp; Regular YTD with no target: &lt;0.0001→20%, &lt;0.010→40%, &lt;0.100→60%, ≥0.100→80% (100% needs a real target) &nbsp;•&nbsp; Progress = current data (Actual + Forecast) vs the selected quarter (compared % capped at 100) &nbsp;•&nbsp; Each program group shows its own Progress beside its % &nbsp;•&nbsp; Progress now-side = Actual + Forecast; Forecast section = pending applications (not yet processed); Forecast is session-only and clears on refresh</div>
     <div class="verdict-strip"><span class="verdict-chip verdict-pass">CONTRACT RENEWAL ≥80%</span><span class="verdict-chip verdict-cond">3 MONTHS PROBATION 60–79%</span><span class="verdict-chip verdict-fail">RE-HIRE CONDITIONALLY &lt;60%</span></div>`;
   document.getElementById('topBar').innerHTML=html;
 
