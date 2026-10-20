@@ -111,9 +111,11 @@ tr.subtotal .tgt-col{color:var(--brand)}
 .rating-low{background:#dc2626;color:#fff}
 .rating-na{background:#e0e0e0;color:#999}
 .rating-total{font-size:1.05rem;font-weight:800;padding:5px 18px;min-width:70px;box-shadow:0 1px 4px rgba(0,0,0,.25);letter-spacing:.2px}
+.fc-cell{background:rgba(245,158,11,.08)}
+.fc-group{background:rgba(245,158,11,.12)}
 .locked input[type="number"],.locked input[type="text"]{pointer-events:none;opacity:.55}
 .locked .pdf-btn,.locked .pdf-btn25,.locked .pdf-btn:disabled,.locked .pdf-btn25:disabled{display:none}
-.locked #lockBtn,.locked #backupBtn,.locked #restoreBtn,.locked #excelBtn,.locked #checkBtn,.locked #snapBtn,.locked #snapSlot{display:none}
+.locked #lockBtn,.locked #backupBtn,.locked #restoreBtn,.locked #excelBtn,.locked #checkBtn,.locked #forecastBtn,.locked #clearFcBtn,.locked #snapBtn,.locked #snapSlot{display:none}
 /* Pct bar */
 .pct-val{font-weight:600;color:var(--ink);min-width:36px;text-align:right;font-size:.78rem}
 /* Toast */
@@ -280,6 +282,8 @@ const colGroups=[
 {label:'Progress Rating',cols:['overall','progress']}
 ];
 const columns=['rice','rice25','corn','corn25','hvc','hvc25','fsh','fsh25','liv','liv25','nca','nca25','totalFarmers','totalFarmers25','totalPct','cfidp26','cfidp25','cfidpPct','adss26','adss25','adssPct','agriAgra','agriAgra25','agriAgraPct','regular','regular25','regularPct','gps2026','gps2025','gpsPct','overall'];
+// Forecast (pending applications, not yet processed): additive only, never targets/actuals
+const FC_FIELDS=['fcFarmers','fcGps','fcCfidp','fcAdss','fcAgri','fcRegular'];
 const CROP_COLS=['rice','rice25','corn','corn25','hvc','hvc25','fsh','fsh25','liv','liv25','nca','nca25'];
 const colLabels={underwriter:'Underwriter',rice:'RICE',rice25:'RICE Tgt',corn:'CORN',corn25:'CORN Tgt',hvc:'HVC',hvc25:'HVC Tgt',fsh:'FSH',fsh25:'FSH Tgt',liv:'LIV',liv25:'LIV Tgt',nca:'NCA',nca25:'NCA Tgt',totalFarmers:'Farmers YTD',totalFarmers25:"Farmers Tgt",totalPct:'Total %',cfidp26:"CFIDP YTD",cfidp25:"CFIDP Tgt",cfidpPct:'CFIDP %',adss26:"ADSS YTD",adss25:"ADSS Tgt",adssPct:'ADSS %',agriAgra:'AGRI-AGRA YTD',agriAgra25:"AGRI-AGRA Tgt",agriAgraPct:'AGRI-AGRA %',regular:'Regular YTD',regular25:"Regular Tgt",regularPct:'Regular %',gps2026:'GPS YTD',gps2025:'GPS Tgt',gpsPct:'GPS %',overall:'Overall Score'};
 // Frozen CSV headers (byte-identical to pre-redesign labels; do not edit)
@@ -303,13 +307,14 @@ Object.entries(provinces).forEach(([prov,munis])=>{
       const row={};
       columns.forEach(c=>row[c]=0);
       row.gpsPct='';row.cfidpPct='';row.adssPct='';row.agriAgraPct='';row.regularPct='';row.overall='';row.underwriter='';row.totalPct='';
+      FC_FIELDS.forEach(f=>row[f]=0);
       data[`${prov}||${muni}||${r}`]=row;
     });
   });
 });
 loadSavedData();
-// Shared published snapshot: always fetched (guarded) for file-vs-file Progress;
-// written into live data only when this browser has nothing saved yet.
+// Shared published snapshot: fetched (guarded) to seed an empty browser and for the Update button.
+// Progress now-side uses live data, so edits show immediately; publish via Backup to share them.
 let sharedCache=null;
 try{
   let savedNow=false;
@@ -331,6 +336,7 @@ try{
 // Migrate old saved totalFarmers25 to individual crop targets (runs at load + after shared/restore snapshots)
 function migrateRow(d){
 if(!d.farmersTgtManual&&d.totalFarmers25>0&&!d.rice25&&!d.corn25&&!d.hvc25&&!d.liv25&&!d.fsh25&&!d.nca25){const s=(d.rice||0)+(d.corn||0)+(d.hvc||0)+(d.fsh||0)+(d.liv||0)+(d.nca||0);if(s>0){d.rice25=Math.round(d.totalFarmers25*(d.rice||0)/s);d.corn25=Math.round(d.totalFarmers25*(d.corn||0)/s);d.hvc25=Math.round(d.totalFarmers25*(d.hvc||0)/s);d.fsh25=Math.round(d.totalFarmers25*(d.fsh||0)/s);d.liv25=Math.round(d.totalFarmers25*(d.liv||0)/s);d.nca25=d.totalFarmers25-d.rice25-d.corn25-d.hvc25-d.fsh25-d.liv25}else{d.rice25=d.corn25=d.hvc25=d.fsh25=d.liv25=0;d.nca25=d.totalFarmers25}}
+FC_FIELDS.forEach(f=>{if(typeof d[f]!=='number'||!isFinite(d[f]))d[f]=0;});
 }
 Object.keys(data).forEach(k=>migrateRow(data[k]));
 recalcDerived();
@@ -461,6 +467,21 @@ function deriveRow(r){
   t.overall=overallFor(t);
   return t;
 }
+// Projected row: actual + forecast pending applications, then the SAME pct/overall formulas.
+// Forecast is additive only; targets and actuals stay untouched.
+function projectedRow(r){
+  const p=Object.assign({},r);
+  p.gps2026=(r.gps2026||0)+(r.fcGps||0);
+  p.cfidp26=(r.cfidp26||0)+(r.fcCfidp||0);
+  p.adss26=(r.adss26||0)+(r.fcAdss||0);
+  p.agriAgra=(r.agriAgra||0)+(r.fcAgri||0);
+  p.regular=(r.regular||0)+(r.fcRegular||0);
+  const t=deriveRow(p);
+  t.totalFarmers=(p.rice||0)+(p.corn||0)+(p.hvc||0)+(p.fsh||0)+(p.liv||0)+(p.nca||0)+(r.fcFarmers||0);
+  t.totalPct=pctOf(t.totalFarmers,t.totalFarmers25);
+  t.overall=overallFor(t);
+  return t;
+}
 function progressText(nowOv,baseOv){
   const n=parseFloat(nowOv),b=parseFloat(baseOv);
   if(!isFinite(n)||!isFinite(b)||b===0)return{txt:'',cls:''};
@@ -470,24 +491,52 @@ function progressText(nowOv,baseOv){
 // Component key -> pct field (drives all seven Progress columns)
 const PROG_COMP={total:'totalPct',cfidp:'cfidpPct',adss:'adssPct',agri:'agriAgraPct',regular:'regularPct',gps:'gpsPct',overall:'overall'};
 const PROG_PCT={totalPct:'total',cfidpPct:'cfidp',adssPct:'adss',agriAgraPct:'agri',regularPct:'regular',gpsPct:'gps',overall:'overall'};
+// Sum forecast fields for a set of {prov,muni} items from LIVE data (forecast is local until republished)
+function fcSumItems(items){
+  const s={fcFarmers:0,fcGps:0,fcCfidp:0,fcAdss:0,fcAgri:0,fcRegular:0};
+  (items||[]).forEach(it=>{const d=data[it.prov+'||'+it.muni+'||1'];if(d)FC_FIELDS.forEach(f=>s[f]+=d[f]||0);});
+  return s;
+}
+// Aggregate projection: summed actuals + summed forecast, same pct/overall formulas as getTotals
+function projectedAgg(t,s){
+  if(!t)return null;
+  const p=Object.assign({},t);
+  p.gps2026=(t.gps2026||0)+s.fcGps;
+  p.cfidp26=(t.cfidp26||0)+s.fcCfidp;
+  p.adss26=(t.adss26||0)+s.fcAdss;
+  p.agriAgra=(t.agriAgra||0)+s.fcAgri;
+  p.regular=(t.regular||0)+s.fcRegular;
+  p.totalFarmers=(t.totalFarmers||0)+s.fcFarmers;
+  p.totalPct=pctOf(p.totalFarmers,p.totalFarmers25);
+  p.gpsPct=pctOf(p.gps2026,p.gps2025);
+  p.cfidpPct=pctOf(p.cfidp26,p.cfidp25);
+  p.adssPct=p.adss25>0?pctOf(p.adss26,p.adss25):'';
+  p.agriAgraPct=(p.agriAgra25>0)?pctOf(p.agriAgra,p.agriAgra25):unmeasuredPct(p.agriAgra);
+  p.regularPct=(p.regular25>0)?pctOf(p.regular,p.regular25):unmeasuredRegular(p.regular);
+  p.overall=overallFor(p);
+  return p;
+}
 // Generic progress cell: scope row|uw|prov|grand, component key, ref {k|items|p}
+// Now-side = current data (Actual + Forecast), baseline stays actual-only
 function progressCell(s,c,ref){
   const f=PROG_COMP[c];if(!f)return{txt:'',cls:''};
   const qd=quarterData();if(!qd)return{txt:'',cls:''};
-  const src=sharedCache||data;
+  const src=data;
   let nowT=null,baseT=null;
   if(s==='row'){
     const bd=qd[ref.k];const nd=src[ref.k];if(!bd||!nd)return{txt:'',cls:''};
-    nowT=deriveRow(nd);baseT=deriveRow(bd);
+    nowT=projectedRow(nd);baseT=deriveRow(bd);
   }else if(s==='uw'){
     for(const it of ref.items){const k=it.prov+'||'+it.muni+'||1';if(!qd[k]||!src[k])return{txt:'',cls:''};}
-    nowT=sumItems(ref.items,src);baseT=sumItems(ref.items,qd);
+    nowT=projectedAgg(sumItems(ref.items,src),fcSumItems(ref.items));baseT=sumItems(ref.items,qd);
   }else if(s==='prov'){
     for(const m of provinces[ref.p]){const k=ref.p+'||'+m+'||1';if(!qd[k]||!src[k])return{txt:'',cls:''};}
-    nowT=getTotals(ref.p,src);baseT=getTotals(ref.p,qd);
+    const items=provinces[ref.p].map(m=>({prov:ref.p,muni:m}));
+    nowT=projectedAgg(getTotals(ref.p,src),fcSumItems(items));baseT=getTotals(ref.p,qd);
   }else if(s==='grand'){
     for(const k of Object.keys(data)){if(!qd[k]||!src[k])return{txt:'',cls:''};}
-    nowT=getGrand(src);baseT=getGrand(qd);
+    const items=[];Object.entries(provinces).forEach(([p,ms])=>ms.forEach(m=>items.push({prov:p,muni:m})));
+    nowT=projectedAgg(getGrand(src),fcSumItems(items));baseT=getGrand(qd);
   }else return{txt:'',cls:''};
   return progressText(nowT[f],baseT[f]);
 }
@@ -815,8 +864,26 @@ function excelField(h){
   if(k==='regular')return'regular25';
   return null;
 }
+// Forecast file header mapper (pending applications): same normalization as excelField
+function fcExcelField(h){
+  let k=String(h||'').trim().toLowerCase().replace(/[._-]+/g,' ').replace(/\s+/g,' ');
+  if(k==='municipality'||k==='municipalities'||k==='muni'||k==='city municipality'||k==='city')return'muni';
+  if(k==='underwriter'||k==='uw'||k==='assigned underwriter')return'uw';
+  const ym=k.match(/^(.*)\s+20\d\d$/);
+  if(ym&&/\s+(fc|forecast|pending)$/.test(ym[1]))k=ym[1].trim();
+  k=k.replace(/\s+(fc|forecast|pending)$/,'').trim();
+  if(k==='farmers'||k==='nof'||k==='no of farmers'||k==='number of farmers'||k==='total farmers')return'fcFarmers';
+  if(k==='gps')return'fcGps';
+  if(k==='cfidp'||k==='cfitf'||k==='cfitf ci')return'fcCfidp';
+  if(k==='adss')return'fcAdss';
+  if(k==='agri agra'||k==='agriagra')return'fcAgri';
+  if(k==='regular')return'fcRegular';
+  return null;
+}
 // Matches normalized row objects to municipality keys. Underwriter is used for matching only, never written. No writes here.
-function matchExcelRows(rows){
+function matchExcelRows(rows,valFields,fieldFn){
+  valFields=valFields||['gps2025','cfidp25','agriAgra25','regular25','totalFarmers25'];
+  fieldFn=fieldFn||excelField;
   const byMuni={};
   Object.entries(provinces).forEach(([prov,munis])=>{munis.forEach(muni=>{
     const k=normExcel(muni);(byMuni[k]=byMuni[k]||[]).push({prov,muni});
@@ -824,7 +891,7 @@ function matchExcelRows(rows){
   const assign=[],skipped=[],unmappedSeen={};
   (rows||[]).forEach(r=>{
     const row={};
-    Object.keys(r||{}).forEach(h=>{const f=excelField(h);if(f&&row[f]===undefined)row[f]=r[h];else if(!f&&h&&!/^__empty/i.test(String(h)))unmappedSeen[h]=1;});
+    Object.keys(r||{}).forEach(h=>{const f=fieldFn(h);if(f&&row[f]===undefined)row[f]=r[h];else if(!f&&h&&!/^__empty/i.test(String(h)))unmappedSeen[h]=1;});
     if(row.muni===undefined||String(row.muni).trim()==='')return;
     const cands=byMuni[normExcel(row.muni)]||[];
     let pick=null;
@@ -837,7 +904,7 @@ function matchExcelRows(rows){
     if(!pick){skipped.push(String(row.muni).trim());return;}
     const key=pick.prov+'||'+pick.muni+'||1';
     const vals={};
-    ['gps2025','cfidp25','agriAgra25','regular25','totalFarmers25'].forEach(f=>{
+    valFields.forEach(f=>{
       if(row[f]!==undefined){const n=numExcel(row[f]);if(n!==null)vals[f]=Math.round(n*10000)/10000;}
     });
     if(!Object.keys(vals).length){skipped.push(String(row.muni).trim()+' (no values)');return;}
@@ -864,7 +931,24 @@ function applyExcelRows(rows){
   const matched=commitExcelRows(m.assign);
   return {matched,skipped:m.skipped,unmapped:m.unmapped};
 }
+// Forecast-only commit: writes fc fields only; never targets, never farmersTgtManual
+function commitForecastRows(assign){
+  let matched=0;
+  (assign||[]).forEach(a=>{
+    const d=data[a.key];if(!d)return;
+    Object.keys(a.vals||{}).forEach(f=>{if(FC_FIELDS.indexOf(f)>=0)d[f]=a.vals[f];});
+    matched++;
+  });
+  if(matched){saveData();recalcDerived();render();populateTopBar();}
+  return matched;
+}
+function applyForecastRows(rows){
+  const m=matchExcelRows(rows,FC_FIELDS,fcExcelField);
+  const matched=commitForecastRows(m.assign);
+  return {matched,skipped:m.skipped,unmapped:m.unmapped};
+}
 const excelFieldLabels={totalFarmers25:'Farmers Tgt',gps2025:'GPS Tgt',cfidp25:'CFIDP Tgt',agriAgra25:'AGRI-AGRA Tgt',regular25:'Regular Tgt'};
+const fcFieldLabels={fcFarmers:'Farmers Fc',fcGps:'GPS Fc',fcCfidp:'CFIDP Fc',fcAdss:'ADSS Fc',fcAgri:'AGRI-AGRA Fc',fcRegular:'Regular Fc'};
 function escHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 // Compares assignments against current app values (4-decimal). No writes here.
 function diffExcelRows(assign){
@@ -877,17 +961,21 @@ function diffExcelRows(assign){
       const av=d[f];
       const an=(typeof av==='number'&&isFinite(av))?Math.round(av*10000)/10000:null;
       if(an===ev){same++;return;}
-      diffs.push({prov:a.prov,muni:a.muni,uw:a.uw,field:f,label:excelFieldLabels[f]||f,excel:ev,app:an===null?'—':an});
+      diffs.push({prov:a.prov,muni:a.muni,uw:a.uw,field:f,label:fcFieldLabels[f]||excelFieldLabels[f]||f,excel:ev,app:an===null?'—':an});
     });
   });
   return {diffs,same,compared};
 }
-let excelMode='apply',pendingExcel=null;
+let excelMode='apply',pendingExcel=null,pendingKind='excel';
 function doExcelImport(){
-  excelMode='apply';document.getElementById('excelInput').click();
+  excelMode='apply';pendingKind='excel';document.getElementById('excelInput').click();
 }
 function doExcelCheck(){
-  excelMode='check';document.getElementById('excelInput').click();
+  excelMode='check';pendingKind='excel';document.getElementById('excelInput').click();
+}
+// Forecast import (pending applications): always review-then-Apply via the Check modal
+function doForecastImport(){
+  excelMode='check';pendingKind='forecast';document.getElementById('excelInput').click();
 }
 function openCheckModal(m){
   pendingExcel=m.assign||[];
@@ -899,7 +987,7 @@ function openCheckModal(m){
   document.getElementById('checkModal').classList.add('show');
 }
 function closeCheckModal(){
-  pendingExcel=null;
+  pendingExcel=null;pendingKind='excel';
   document.getElementById('checkModal').classList.remove('show');
 }
 document.getElementById('excelInput').addEventListener('change',function(e){
@@ -916,8 +1004,8 @@ document.getElementById('excelInput').addEventListener('change',function(e){
         const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
         if(!rows.length){toast('Excel sheet is empty','error');return;}
         document.getElementById('loading').classList.remove('show');
-        if(excelMode==='check'){openCheckModal(matchExcelRows(rows));return;}
-        const res=applyExcelRows(rows);
+        if(excelMode==='check'){openCheckModal(matchExcelRows(rows,pendingKind==='forecast'?FC_FIELDS:null,pendingKind==='forecast'?fcExcelField:null));return;}
+        const res=pendingKind==='forecast'?applyForecastRows(rows):applyExcelRows(rows);
         let msg='Excel import: '+res.matched+' updated';
         if(res.skipped.length)msg+=', '+res.skipped.length+' skipped ('+res.skipped.slice(0,5).join(', ')+(res.skipped.length>5?'…':'')+')';
         if(res.unmapped&&res.unmapped.length)msg+='; ignored columns: '+res.unmapped.slice(0,5).join(', ')+(res.unmapped.length>5?'…':'');
@@ -932,9 +1020,10 @@ document.getElementById('excelInput').addEventListener('change',function(e){
 document.getElementById('checkCancel').addEventListener('click',closeCheckModal);
 document.getElementById('checkModal').addEventListener('click',function(e){if(e.target===this)closeCheckModal();});
 document.getElementById('checkApply').addEventListener('click',function(){
-  const n=commitExcelRows(pendingExcel||[]);
+  const kind=pendingKind;
+  const n=kind==='forecast'?commitForecastRows(pendingExcel||[]):commitExcelRows(pendingExcel||[]);
   closeCheckModal();
-  toast('Excel applied: '+n+' updated','success');
+  toast((kind==='forecast'?'Forecast applied: ':'Excel applied: ')+n+' updated','success');
 });
 document.getElementById('disOk').addEventListener('click',function(){
   document.getElementById('disclaimerModal').classList.remove('show');
@@ -1165,6 +1254,7 @@ function render(){
       }
     });
    html+=`</tr></tbody></table></div></div>`;
+  html+=buildForecastHTML();
   html+=buildRankingHTML(rankSortCol,rankSortDir);
   html+=buildDetailRankingHTML(detailSortCol,detailSortDir);
   document.getElementById('app').innerHTML=html;
@@ -1180,6 +1270,115 @@ function render(){
 }
 
 // --- UNDERWRITER RANKING ---
+// --- FORECAST PRODUCTION SECTION (per Province + per Underwriter) ---
+// Programs shown: [actual field, fc field, target field, label]
+const FC_PROGS=[
+  ['totalFarmers','fcFarmers','totalFarmers25','Farmers'],
+  ['gps2026','fcGps','gps2025','GPS'],
+  ['cfidp26','fcCfidp','cfidp25','CFIDP'],
+  ['adss26','fcAdss','adss25','ADSS'],
+  ['agriAgra','fcAgri','agriAgra25','AGRI-AGRA'],
+  ['regular','fcRegular','regular25','Regular']
+];
+function hasForecast(){
+  let n=0;
+  Object.keys(data).forEach(k=>FC_FIELDS.forEach(f=>{if((data[k][f]||0)>0)n++;}));
+  return n;
+}
+function clearForecastData(){
+  let n=0;
+  Object.keys(data).forEach(k=>FC_FIELDS.forEach(f=>{if((data[k][f]||0)!==0){data[k][f]=0;n++;}}));
+  if(n){saveData();recalcDerived();render();populateTopBar();}
+  return n;
+}
+function clearForecast(){
+  if(locked){toast('Unlock to clear forecast','error');return;}
+  if(!confirm('Clear ALL forecast values?'))return;
+  const n=clearForecastData();
+  toast(n?'Forecast cleared ('+n+' values)':'No forecast values to clear',n?'success':'info');
+}
+function fcProjPct(p,prog){
+  const [af,ff,tf]=prog;
+  if(tf==='totalFarmers25')return p.totalPct;
+  if(tf==='gps2025')return p.gpsPct;
+  if(tf==='cfidp25')return p.cfidpPct;
+  if(tf==='adss25')return p.adssPct;
+  if(tf==='agriAgra25')return p.agriAgraPct;
+  if(tf==='regular25')return p.regularPct;
+  return '';
+}
+function fcRowHTML(label,totals,fcSum,proj){
+  let h=`<tr><td class="muni-name">${escHtml(label)}</td>`;
+  FC_PROGS.forEach(prog=>{
+    const [af,ff]=prog;
+    const av=totals[af]||0,fv=fcSum[ff]||0,pv=(proj[af]||0)+fv;
+    h+=`<td class="bl">${fmtNum(av)}</td><td class="fc-cell">${fv?fmtNum(fv):'—'}</td><td>${fmtNum(pv)}</td>`;
+    const pp=fcProjPct(proj,prog);const pc=pctClass(pp);
+    h+=`<td${pc?' class="'+pc+'"':''}>${fmtPct(pp)}</td>`;
+  });
+  const ao=totals.overall,po=proj.overall;
+  const aon=parseFloat(ao)||0,pon=parseFloat(po)||0;
+  const delta=(ao===''&&po==='')?'':((pon-aon)>0?'+':'')+(pon-aon).toFixed(1);
+  h+=`<td><strong class="rating rating-total ${overallClass(po)}">${fmtPct(po)}</strong></td>`;
+  h+=`<td class="bl">${delta}</td>`;
+  h+=`</tr>`;
+  return h;
+}
+function fcTableHTML(aggRows,grand){
+  let h=`<div class="table-wrapper"><table><thead><tr><th rowspan="2" class="muni-name">Province / Underwriter</th>`;
+  FC_PROGS.forEach(prog=>{h+=`<th colspan="4" class="bl fc-group">${prog[3]}</th>`;});
+  h+=`<th colspan="2">Forecast Overall</th></tr><tr>`;
+  FC_PROGS.forEach(()=>{h+=`<th>YTD</th><th>Fc</th><th>Proj</th><th>Proj %</th>`;});
+  h+=`<th>Score</th><th>Δ vs Actual</th></tr></thead><tbody>`;
+  aggRows.forEach(r=>{h+=fcRowHTML(r.label,r.totals,r.fc,r.proj);});
+  h+=`<tr class="grand-total-row"><td><strong>Grand Total</strong></td>`;
+  FC_PROGS.forEach(prog=>{
+    const [af,ff]=prog;
+    const av=grand.totals[af]||0,fv=grand.fc[ff]||0,pv=(grand.proj[af]||0)+fv;
+    h+=`<td class="bl"><strong>${fmtNum(av)}</strong></td><td class="fc-cell"><strong>${fv?fmtNum(fv):'—'}</strong></td><td><strong>${fmtNum(pv)}</strong></td>`;
+    const pp=fcProjPct(grand.proj,prog);const pc=pctClass(pp);
+    h+=`<td${pc?' class="'+pc+'"':''}><strong>${fmtPct(pp)}</strong></td>`;
+  });
+  const ao=grand.totals.overall,po=grand.proj.overall;
+  const aon=parseFloat(ao)||0,pon=parseFloat(po)||0;
+  const delta=(ao===''&&po==='')?'':((pon-aon)>0?'+':'')+(pon-aon).toFixed(1);
+  h+=`<td><strong class="rating rating-total ${overallClass(po)}">${fmtPct(po)}</strong></td><td class="bl"><strong>${delta}</strong></td>`;
+  h+=`</tr></tbody></table></div>`;
+  return h;
+}
+function fcGrandAgg(){
+  const totals=getGrand();
+  const items=[];Object.entries(provinces).forEach(([p,ms])=>ms.forEach(m=>items.push({prov:p,muni:m})));
+  const fc=fcSumItems(items);
+  return {totals,fc,proj:projectedAgg(totals,fc)};
+}
+function buildForecastHTML(){
+  if(!hasForecast())return'';
+  const provRows=Object.keys(provinces).map(prov=>{
+    const totals=getTotals(prov);
+    const items=provinces[prov].map(m=>({prov,muni:m}));
+    const fc=fcSumItems(items);
+    return {label:prov,totals,fc,proj:projectedAgg(totals,fc)};
+  });
+  const uwMap={};
+  Object.entries(provinces).forEach(([prov,munis])=>munis.forEach(muni=>{
+    const uw=data[`${prov}||${muni}||1`].underwriter||'(Unassigned)';
+    (uwMap[uw]=uwMap[uw]||[]).push({prov,muni});
+  }));
+  const uwRows=Object.keys(uwMap).filter(uw=>uw!=='(Unassigned)').map(uw=>{
+    const items=uwMap[uw];
+    const totals=sumItems(items);
+    const fc=fcSumItems(items);
+    return {label:uw,totals,fc,proj:projectedAgg(totals,fc)};
+  }).sort((a,b)=>(parseFloat(b.proj.overall)||0)-(parseFloat(a.proj.overall)||0));
+  const grand=fcGrandAgg();
+  let h=`<div class="grand-total" id="forecastSection"><h2>Forecast Production <span style="font-weight:400;font-size:.8rem;opacity:.7">(pending applications, not yet processed)</span> <button class="btn btn-outline btn-sm" id="clearFcBtn" style="margin-left:8px">Clear forecast</button></h2>`;
+  h+=fcTableHTML(provRows,grand);
+  h+=`<h3 style="margin:14px 0 6px;font-size:.9rem">Per Underwriter</h3>`;
+  h+=fcTableHTML(uwRows,grand);
+  h+=`</div>`;
+  return h;
+}
 function buildDetailRankingHTML(sCol,sDir){
   const cols=['rice','corn','hvc','liv','fsh','nca','totalFarmers','cfidp26','adss26','agriAgra','regular','gps2026'];
   const labels=['Rice','Corn','HVC','LIV','FSH','NCA','Farmers YTD','CFIDP YTD','ADSS YTD','AGRI-AGRA YTD','Regular YTD','GPS YTD'];
@@ -1312,6 +1511,7 @@ function populateTopBar(){
     <button class="btn btn-outline btn-sm" id="sharedBtn">Update</button>
     <button class="btn btn-outline btn-sm" id="excelBtn">Excel</button>
     <button class="btn btn-outline btn-sm" id="checkBtn">Check</button>
+    <button class="btn btn-outline btn-sm" id="forecastBtn">Forecast</button>
     <select class="filter-select" id="snapSlot">
       <option value="1">1st Quarter</option>
       <option value="2">2nd Quarter</option>
@@ -1325,7 +1525,7 @@ function populateTopBar(){
       <div class="stat-card"><div class="num" id="statFarmers">${fmtNum(totalFarmers)}</div><div class="lbl">Total Farmers</div></div>
       <div class="stat-card"><div class="num" id="statOverall">${avgOverall}%</div><div class="lbl">Overall (Grand)</div></div>
     </div>
-    <div class="legend"><strong>Overall Score</strong> = GPS 25% + Total 25% + CFIDP 15% + ADSS 20% + AGRI-AGRA 7.5% + Regular 7.5% &nbsp;•&nbsp; Missing components count as 0 — every row scores &nbsp;•&nbsp; No targets yet → blank • all % capped at 100 &nbsp;•&nbsp; AGRI-AGRA YTD with no target: &lt;0.01→25%, &lt;0.10→50%, ≥0.10→75% (100% needs a real target) &nbsp;•&nbsp; Regular YTD with no target: &lt;0.0001→20%, &lt;0.010→40%, &lt;0.100→60%, ≥0.100→80% (100% needs a real target) &nbsp;•&nbsp; Progress = shared-data.json Overall vs the selected quarter (live data when offline) &nbsp;•&nbsp; Each program group shows its own Progress beside its %</div>
+    <div class="legend"><strong>Overall Score</strong> = GPS 25% + Total 25% + CFIDP 15% + ADSS 20% + AGRI-AGRA 7.5% + Regular 7.5% &nbsp;•&nbsp; Missing components count as 0 — every row scores &nbsp;•&nbsp; No targets yet → blank • all % capped at 100 &nbsp;•&nbsp; AGRI-AGRA YTD with no target: &lt;0.01→25%, &lt;0.10→50%, ≥0.10→75% (100% needs a real target) &nbsp;•&nbsp; Regular YTD with no target: &lt;0.0001→20%, &lt;0.010→40%, &lt;0.100→60%, ≥0.100→80% (100% needs a real target) &nbsp;•&nbsp; Progress = current data (Actual + Forecast) vs the selected quarter &nbsp;•&nbsp; Each program group shows its own Progress beside its % &nbsp;•&nbsp; Progress now-side = Actual + Forecast; Forecast section = pending applications (not yet processed)</div>
     <div class="verdict-strip"><span class="verdict-chip verdict-pass">CONTRACT RENEWAL ≥80%</span><span class="verdict-chip verdict-cond">3 MONTHS PROBATION 60–79%</span><span class="verdict-chip verdict-fail">RE-HIRE CONDITIONALLY &lt;60%</span></div>`;
   document.getElementById('topBar').innerHTML=html;
 
@@ -1363,6 +1563,7 @@ function populateTopBar(){
   document.getElementById('sharedBtn').addEventListener('click',loadShared);
   document.getElementById('excelBtn').addEventListener('click',doExcelImport);
   document.getElementById('checkBtn').addEventListener('click',doExcelCheck);
+  document.getElementById('forecastBtn').addEventListener('click',doForecastImport);
   document.getElementById('snapBtn').addEventListener('click',snapshotQuarter);
   const cs=document.getElementById('compareSel');
   cs.value=quarterCache[compareQuarter]?compareQuarter:'';
@@ -1568,6 +1769,8 @@ document.addEventListener('click',function(e){
   if(ch){ch.parentElement.classList.toggle('collapsed');return;}
   const gh=e.target.closest('.grand-total h2');
   if(gh&&!gh.hasAttribute('onclick')){gh.parentElement.classList.toggle('collapsed');return;}
+  const fcb=e.target.closest('#clearFcBtn');
+  if(fcb){clearForecast();return;}
   const btn=e.target.closest('.pdf-btn');
   if(btn){
     if(btn.disabled)return;
