@@ -1092,11 +1092,9 @@ function progressCell(s,c,ref){
   const toVal=reverse?baseT[f]:nowT[f];
   const capped=(isFinite(parseFloat(nowT[f]))&&parseFloat(nowT[f])>100)||(isFinite(parseFloat(baseT[f]))&&parseFloat(baseT[f])>100);
   p.tip=progressTip(fromLabel,fromVal,toLabel,toVal,p.pts,p.txt,capped);
-  if(c==='overall'){
-    const spokenPts=progressSpoken(p.pts,'pts')||'no point change';
-    const spokenRel=progressSpoken(p.txt,'pct')||'relative change unavailable';
-    p.sr=spokenPts+', '+spokenRel+' versus '+qLabel;
-  }
+  const spokenPts=progressSpoken(p.pts,'pts')||'no point change';
+  const spokenRel=progressSpoken(p.txt,'pct')||'relative change unavailable';
+  p.sr=spokenPts+', '+spokenRel+' versus '+qLabel;
   return p;
 }
 function paintProgPts(el,p){
@@ -2085,10 +2083,13 @@ function render(){
   });
   const uwMap=cachedUwMap;
   const provOrder=Object.keys(provinces);
+  // Option A: Arrange underwriters by rank in descending order from highest to lowest
   const uwOrder=Object.keys(uwMap).sort((a,b)=>{
     if(a==='(Unassigned)')return 1;
     if(b==='(Unassigned)')return -1;
-    return provOrder.indexOf(uwMap[a][0].prov)-provOrder.indexOf(uwMap[b][0].prov);
+    const scoreA=parseFloat(sumItems(uwMap[a]).overall)||0;
+    const scoreB=parseFloat(sumItems(uwMap[b]).overall)||0;
+    return scoreB-scoreA;
   });
   uwOrder.forEach(uw=>{uwMap[uw].sort((a,b)=>{
     const pi=provOrder.indexOf(a.prov)-provOrder.indexOf(b.prov);
@@ -2096,12 +2097,15 @@ function render(){
   })});
 
   let html='';
-  uwOrder.forEach(uw=>{
+  uwOrder.forEach((uw,uwIdx)=>{
     const items=uwMap[uw];
     const totalRows=items.length;
     const totals=sumItems(items);
     const itemsJson=JSON.stringify(items).replace(/"/g,'&quot;');
-    html+=`<div class="province-section" data-uw="${escHtml(uw)}"><h2><span class="uw-head-main"><span>Underwriter: ${escHtml(uw)} <span style="font-weight:400;font-size:.8rem;opacity:.8">(${items.length})</span></span><button type="button" class="uw-head-scorecard-btn" data-uw="${escHtml(uw)}" title="View Underwriter Performance Appraisal Scorecard">📊 Scorecard</button><span class="uw-head-sum" data-uw-sum="${itemsJson}"></span></span></h2><div class="table-wrapper"><table>
+    const rankNum=uw==='(Unassigned)'?'':(uwIdx+1);
+    const rankBadge=rankNum?`<span class="rank-num ${rankNum<=3?`rank-${rankNum}`:'rank-rest'}" style="margin-right:8px;vertical-align:middle" title="Performance Rank #${rankNum}">#${rankNum}</span>`:'';
+    const ovPill=totals.overall?`<span style="font-size:.76rem;font-weight:800;margin-left:8px;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,.2);vertical-align:middle" title="Overall Composite Score">${totals.overall}% Overall</span>`:'';
+    html+=`<div class="province-section" data-uw="${escHtml(uw)}"><h2><span class="uw-head-main"><span>${rankBadge}Underwriter: ${escHtml(uw)} <span style="font-weight:400;font-size:.8rem;opacity:.8">(${items.length})</span>${ovPill}</span><button type="button" class="uw-head-scorecard-btn" data-uw="${escHtml(uw)}" title="View Underwriter Performance Appraisal Scorecard">📊 Scorecard</button><span class="uw-head-sum" data-uw-sum="${itemsJson}"></span></span></h2><div class="table-wrapper"><table>
  <thead><tr><th rowspan="2" scope="col">Province</th><th class="muni-col main-sort" rowspan="2" data-ms="muni" scope="col" aria-sort="${mainSortCol==='muni'?(mainSortDir==='asc'?'ascending':'descending'):'none'}">Municipality${mainSortCol==='muni'?(mainSortDir==='asc'?'<span aria-hidden="true"> ▲</span>':'<span aria-hidden="true"> ▼</span>'):''}</th>`;
     colGroups.forEach(g=>{html+=`<th colspan="${g.cols.length}" scope="colgroup"${g.label==='Crops'?' class="cc-crops-g"':''}>${g.label}</th>`});
     html+=`</tr><tr>`;
@@ -2111,7 +2115,7 @@ function render(){
       if(CROP_COLS.includes(c))cls.push('cc-crops');
       if(['rice25','corn25','hvc25','liv25','fsh25','nca25','totalFarmers25','cfidp25','adss25','agriAgra25','regular25','gps2025'].includes(c))cls.push('tgt-col');
       html+=`<th class="${cls.join(' ')}" data-ms="${c}" scope="col" aria-sort="${mainSortCol===c?(mainSortDir==='asc'?'ascending':'descending'):'none'}">${colLabels[c]}${mainSortCol===c?(mainSortDir==='asc'?'<span aria-hidden="true"> ▲</span>':'<span aria-hidden="true"> ▼</span>'):''}</th>`;
-      if(PROG_PCT[c])html+=`<th scope="col"${c==='overall'?' title="Absolute change (pts) and relative change (%) vs the selected quarter; live side includes Actual + Forecast"':''}>${c==='overall'?'Progress (pts / %)':'Progress'}</th>`;
+      if(PROG_PCT[c])html+=`<th scope="col" title="Absolute change (pts) and relative change (%) vs the selected quarter; live side includes Actual + Forecast">Progress (pts / %)</th>`;
     });
     html+=`</tr></thead><tbody>`;
     let rows=items,flatProv=false;
@@ -2158,8 +2162,7 @@ function render(){
           const pck=PROG_PCT[c];
           if(pck){
             const ref=JSON.stringify({s:'row',c:pck,k:key}).replace(/"/g,'&quot;');
-            if(pck==='overall')html+=`<td><span class="prog-pair"><span class="prog-pts" aria-hidden="true"></span><span class="pct-val" data-prog='${ref}' aria-hidden="true"></span><span class="sr-only prog-sr"></span></span></td>`;
-            else html+=`<td><span class="pct-val" data-prog='${ref}'></span></td>`;
+            html+=`<td><span class="prog-pair"><span class="prog-pts" aria-hidden="true"></span><span class="pct-val" data-prog='${ref}' aria-hidden="true"></span><span class="sr-only prog-sr"></span></span></td>`;
           }
         }else if(c==='underwriter'){
           html+=`<td><input type="text" class="uw-input" data-key="${key}" data-col="underwriter" value="${escHtml(data[key].underwriter||'')}" placeholder="Name"></td>`;
@@ -2186,8 +2189,7 @@ function render(){
         const pck=PROG_PCT[c];
         if(pck){
           const ref=JSON.stringify({s:'uw',c:pck,items:items}).replace(/"/g,'&quot;');
-          if(pck==='overall')html+=`<td><span class="prog-pair"><span class="prog-pts" aria-hidden="true"></span><strong data-prog='${ref}' aria-hidden="true"></strong><span class="sr-only prog-sr"></span></span></td>`;
-          else html+=`<td><strong data-prog='${ref}'></strong></td>`;
+          html+=`<td><span class="prog-pair"><span class="prog-pts" aria-hidden="true"></span><strong data-prog='${ref}' aria-hidden="true"></strong><span class="sr-only prog-sr"></span></span></td>`;
         }
       }
     });
@@ -2206,7 +2208,7 @@ function render(){
       if(CROP_COLS.includes(c))cls.push('cc-crops');
         if(['rice25','corn25','hvc25','liv25','fsh25','nca25','totalFarmers25','cfidp25','adss25','agriAgra25','regular25','gps2025'].includes(c))cls.push('tgt-col');
         html+=`<th scope="col"${cls.length?' class="'+cls.join(' ')+'"':''}>${colLabels[c]}</th>`;
-        if(PROG_PCT[c])html+=`<th scope="col"${c==='overall'?' title="Absolute change (pts) and relative change (%) vs the selected quarter; live side includes Actual + Forecast"':''}>${c==='overall'?'Progress (pts / %)':'Progress'}</th>`;
+        if(PROG_PCT[c])html+=`<th scope="col" title="Absolute change (pts) and relative change (%) vs the selected quarter; live side includes Actual + Forecast">Progress (pts / %)</th>`;
       }
     });
    html+=`</tr></thead><tbody>`;
@@ -2226,8 +2228,7 @@ function render(){
         const pck=PROG_PCT[c];
         if(pck){
           const ref=JSON.stringify({s:'prov',c:pck,p:prov}).replace(/"/g,'&quot;');
-          if(pck==='overall')html+=`<td><span class="prog-pair"><span class="prog-pts" aria-hidden="true"></span><strong data-prog='${ref}' aria-hidden="true"></strong><span class="sr-only prog-sr"></span></span></td>`;
-          else html+=`<td><strong data-prog='${ref}'></strong></td>`;
+          html+=`<td><span class="prog-pair"><span class="prog-pts" aria-hidden="true"></span><strong data-prog='${ref}' aria-hidden="true"></strong><span class="sr-only prog-sr"></span></span></td>`;
         }
       }
     });
@@ -2248,8 +2249,7 @@ function render(){
       const pck=PROG_PCT[c];
       if(pck){
         const ref=JSON.stringify({s:'grand',c:pck}).replace(/"/g,'&quot;');
-        if(pck==='overall')html+=`<td><span class="prog-pair"><span class="prog-pts" aria-hidden="true"></span><strong data-prog='${ref}' aria-hidden="true"></strong><span class="sr-only prog-sr"></span></span></td>`;
-        else html+=`<td><strong data-prog='${ref}'></strong></td>`;
+        html+=`<td><span class="prog-pair"><span class="prog-pts" aria-hidden="true"></span><strong data-prog='${ref}' aria-hidden="true"></strong><span class="sr-only prog-sr"></span></span></td>`;
       }
       }
     });
