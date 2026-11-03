@@ -311,11 +311,57 @@ body.compact .cc-crops,body.compact .cc-crops-g{display:none}
 .uw-head-scorecard-btn{background:rgba(255,255,255,.15)!important;color:#fff!important;border:1px solid rgba(255,255,255,.45)!important;font-size:.7rem!important;padding:2px 8px!important;border-radius:4px!important;cursor:pointer;margin-left:8px;vertical-align:middle;transition:all .15s}
 .uw-head-scorecard-btn:hover{background:rgba(255,255,255,.3)!important}
 
+/* IPCR Tab & Form Styles */
+.uw-tab-bar{display:flex;gap:8px;border-bottom:2px solid #e2e8f0;padding-bottom:6px;margin:2px 0 10px 0}
+.uw-tab-btn{background:transparent;border:none;border-bottom:3px solid transparent;padding:6px 14px;font-size:.85rem;font-weight:700;color:var(--muted);cursor:pointer;border-radius:4px 4px 0 0;transition:all .15s}
+.uw-tab-btn:hover{color:var(--brand);background:#f1f5f9}
+.uw-tab-btn.active{color:var(--brand);border-bottom-color:var(--accent);background:var(--accent-soft)}
+
+.ipcr-paper{background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:20px 24px;display:flex;flex-direction:column;gap:14px}
+.ipcr-head{text-align:center;border-bottom:2px solid #334155;padding-bottom:10px}
+.ipcr-republic{font-size:.74rem;letter-spacing:1px;color:var(--muted);text-transform:uppercase}
+.ipcr-agency{font-size:1.15rem;font-weight:800;color:var(--brand);letter-spacing:.5px;margin-top:2px}
+.ipcr-office{font-size:.82rem;font-weight:600;color:#334155}
+.ipcr-doc-title{font-size:1.25rem;font-weight:900;color:var(--brand);letter-spacing:1px;margin:8px 0 2px 0}
+.ipcr-doc-sub{font-size:.76rem;color:var(--muted)}
+
+.ipcr-meta-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;font-size:.8rem}
+.ipcr-meta-item{display:flex;flex-direction:column;gap:2px}
+.ipcr-meta-lbl{font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+.ipcr-meta-val{font-size:.85rem;font-weight:600;color:var(--brand)}
+
+.ipcr-table-wrap{border:1px solid #cbd5e1;border-radius:6px;overflow-x:auto}
+.ipcr-table{width:100%;border-collapse:collapse;font-size:.8rem}
+.ipcr-table th, .ipcr-table td{border:1px solid #cbd5e1;padding:8px 10px}
+.ipcr-table th{background:#f1f5f9;color:var(--brand);font-weight:700;text-align:center}
+.ipcr-table td{text-align:center}
+.ipcr-table td.mfo-cell{text-align:left;font-weight:600;color:var(--brand)}
+.ipcr-table tr:hover td{background:#f8fafc}
+.ipcr-total-row th{background:#e2e8f0;font-weight:800;color:var(--brand)}
+
+.ipcr-summary-banner{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:14px 18px;align-items:center}
+.ipcr-grade-card{display:flex;flex-direction:column;gap:3px;text-align:center}
+.ipcr-grade-label{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.ipcr-grade-score{font-size:1.6rem;font-weight:900;color:var(--brand)}
+.ipcr-grade-sub{font-size:.85rem;font-weight:600;color:var(--ink)}
+
+.ipcr-adjectival-pill{display:inline-block;padding:5px 12px;border-radius:20px;font-weight:800;font-size:.85rem;letter-spacing:.4px}
+.ipcr-badge-o{background:#dcfce7;color:#15803d;border:1px solid #86efac}
+.ipcr-badge-vs{background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd}
+.ipcr-badge-s{background:#fef3c7;color:#b45309;border:1px solid #fde68a}
+.ipcr-badge-u{background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5}
+.ipcr-badge-p{background:#f3f4f6;color:#4b5563;border:1px solid #d1d5db}
+
 @media print{
   body.printing-scorecard > *:not(#uwScorecardModal){display:none!important}
   body.printing-scorecard #uwScorecardModal{display:block!important;position:static;background:#fff;padding:0}
-  body.printing-scorecard .uw-card-box{box-shadow:none;border:none;width:100%;max-height:none;overflow:visible}
-  body.printing-scorecard .uw-card-actions{display:none!important}
+  body.printing-scorecard .uw-card-box{box-shadow:none;border:none;width:100%;max-height:none;overflow:visible;padding:0}
+  body.printing-scorecard .uw-card-actions,
+  body.printing-scorecard .uw-tab-bar{display:none!important}
+  body.printing-scorecard .ipcr-paper{box-shadow:none;border:none;padding:0}
+  body.printing-scorecard .ipcr-table th,
+  body.printing-scorecard .ipcr-table td{border:1px solid #333!important;color:#000!important}
+  body.printing-scorecard .ipcr-summary-banner{border:1px solid #333!important;background:#fff!important}
 }
 /* Interactive Forecast Input Modal */
 #fcModal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,25,40,.68);z-index:998;align-items:center;justify-content:center;padding:16px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
@@ -433,59 +479,139 @@ body.compact .cc-crops,body.compact .cc-crops-g{display:none}
     </div>
   </div>
 
-  <div class="uw-summary-grid">
-    <div class="uw-stat-box">
-      <div class="uw-stat-val" id="uwCardPortfolioScore">0.0%</div>
-      <div class="uw-stat-lbl">Portfolio Overall (Macro)</div>
-      <div class="uw-stat-hint" id="uwCardDeficitText">—</div>
+  <div class="uw-tab-bar">
+    <button type="button" class="uw-tab-btn active" id="uwTabDossierBtn">📊 Operations Dossier</button>
+    <button type="button" class="uw-tab-btn" id="uwTabIpcrBtn">🏛️ Government IPCR</button>
+  </div>
+
+  <div id="uwDossierView" style="display:flex;flex-direction:column;gap:14px">
+    <div class="uw-summary-grid">
+      <div class="uw-stat-box">
+        <div class="uw-stat-val" id="uwCardPortfolioScore">0.0%</div>
+        <div class="uw-stat-lbl">Portfolio Overall (Macro)</div>
+        <div class="uw-stat-hint" id="uwCardDeficitText">—</div>
+      </div>
+      <div class="uw-stat-box">
+        <div class="uw-stat-val" id="uwCardEquityVal">0.0%</div>
+        <div class="uw-stat-lbl">Territory Coverage (Equity)</div>
+        <div class="uw-stat-hint" id="uwCardEquityFraction">0 of 0 LGUs ≥ 80%</div>
+      </div>
+      <div class="uw-stat-box">
+        <div class="uw-stat-val" id="uwCardAvgMuni">0.0%</div>
+        <div class="uw-stat-lbl">Average LGU Score</div>
+        <div class="uw-stat-hint" id="uwCardDispersion">Min: — • Max: —</div>
+      </div>
+      <div class="uw-stat-box">
+        <div class="uw-stat-val" id="uwCardTotalFarmers">0</div>
+        <div class="uw-stat-lbl">Total Farmers Covered</div>
+        <div class="uw-stat-hint" id="uwCardGpsSum">GPS: ₱0.00M</div>
+      </div>
     </div>
-    <div class="uw-stat-box">
-      <div class="uw-stat-val" id="uwCardEquityVal">0.0%</div>
-      <div class="uw-stat-lbl">Territory Coverage (Equity)</div>
-      <div class="uw-stat-hint" id="uwCardEquityFraction">0 of 0 LGUs ≥ 80%</div>
+
+    <div class="uw-section-card">
+      <div class="uw-section-title">Program Accomplishment Breakdown (vs 100% Component Cap)</div>
+      <div class="uw-prog-grid" id="uwCardProgGrid"></div>
     </div>
-    <div class="uw-stat-box">
-      <div class="uw-stat-val" id="uwCardAvgMuni">0.0%</div>
-      <div class="uw-stat-lbl">Average LGU Score</div>
-      <div class="uw-stat-hint" id="uwCardDispersion">Min: — • Max: —</div>
+
+    <div class="uw-alert-box" id="uwCardAlertBox">
+      <div class="uw-alert-title">🔍 Performance Diagnostic & Territory Bottlenecks</div>
+      <div id="uwCardAlertBody"></div>
     </div>
-    <div class="uw-stat-box">
-      <div class="uw-stat-val" id="uwCardTotalFarmers">0</div>
-      <div class="uw-stat-lbl">Total Farmers Covered</div>
-      <div class="uw-stat-hint" id="uwCardGpsSum">GPS: ₱0.00M</div>
+
+    <div class="uw-section-card">
+      <div class="uw-section-title">Municipality Performance Matrix (<span id="uwCardLguListCount">0</span> LGUs)</div>
+      <div class="table-wrapper" style="max-height:38vh">
+        <table class="rank-tbl uw-matrix-tbl">
+          <thead>
+            <tr>
+              <th>Municipality</th>
+              <th>Province</th>
+              <th>Farmers (YTD/Tgt)</th>
+              <th>GPS (YTD/Tgt)</th>
+              <th>CFIDP %</th>
+              <th>ADSS %</th>
+              <th>AGRI %</th>
+              <th>Regular %</th>
+              <th>Overall</th>
+              <th>Verdict</th>
+            </tr>
+          </thead>
+          <tbody id="uwCardMuniTableBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
-  <div class="uw-section-card">
-    <div class="uw-section-title">Program Accomplishment Breakdown (vs 100% Component Cap)</div>
-    <div class="uw-prog-grid" id="uwCardProgGrid"></div>
-  </div>
+  <div id="uwIpcrView" style="display:none">
+    <div class="ipcr-paper">
+      <div class="ipcr-head">
+        <div class="ipcr-republic">Republic of the Philippines</div>
+        <div class="ipcr-agency">PHILIPPINE CROP INSURANCE CORPORATION</div>
+        <div class="ipcr-office">Regional Office No. X — Northern Mindanao & Caraga</div>
+        <h3 class="ipcr-doc-title">INDIVIDUAL PERFORMANCE COMMITMENT AND REVIEW (IPCR)</h3>
+        <div class="ipcr-doc-sub">Territory Performance Rating Based on Audited Accomplishment vs Approved Target</div>
+      </div>
 
-  <div class="uw-alert-box" id="uwCardAlertBox">
-    <div class="uw-alert-title">🔍 Performance Diagnostic & Territory Bottlenecks</div>
-    <div id="uwCardAlertBody"></div>
-  </div>
+      <div class="ipcr-meta-grid">
+        <div class="ipcr-meta-item">
+          <span class="ipcr-meta-lbl">Ratee / Underwriter:</span>
+          <strong class="ipcr-meta-val" id="ipcrRateeName">—</strong>
+        </div>
+        <div class="ipcr-meta-item">
+          <span class="ipcr-meta-lbl">Position / Designation:</span>
+          <span class="ipcr-meta-val">Agricultural Insurance Specialist II (Underwriter)</span>
+        </div>
+        <div class="ipcr-meta-item">
+          <span class="ipcr-meta-lbl">Assigned Territory:</span>
+          <span class="ipcr-meta-val" id="ipcrTerritory">—</span>
+        </div>
+        <div class="ipcr-meta-item">
+          <span class="ipcr-meta-lbl">Rating Period:</span>
+          <span class="ipcr-meta-val">CY 2026 (Semester / Annual)</span>
+        </div>
+      </div>
 
-  <div class="uw-section-card">
-    <div class="uw-section-title">Municipality Performance Matrix (<span id="uwCardLguListCount">0</span> LGUs)</div>
-    <div class="table-wrapper" style="max-height:38vh">
-      <table class="rank-tbl uw-matrix-tbl">
-        <thead>
-          <tr>
-            <th>Municipality</th>
-            <th>Province</th>
-            <th>Farmers (YTD/Tgt)</th>
-            <th>GPS (YTD/Tgt)</th>
-            <th>CFIDP %</th>
-            <th>ADSS %</th>
-            <th>AGRI %</th>
-            <th>Regular %</th>
-            <th>Overall</th>
-            <th>Verdict</th>
-          </tr>
-        </thead>
-        <tbody id="uwCardMuniTableBody"></tbody>
-      </table>
+      <div class="table-wrapper ipcr-table-wrap">
+        <table class="ipcr-table">
+          <thead>
+            <tr>
+              <th style="width:28%">Major Final Output (MFO) / Program Line</th>
+              <th style="width:11%">Target</th>
+              <th style="width:11%">Actual Accomplishment</th>
+              <th style="width:10%">% Accomp</th>
+              <th style="width:8%">Weight</th>
+              <th style="width:10%">Rating (1–5)</th>
+              <th style="width:10%">Weighted Score</th>
+              <th style="width:12%">Adjectival</th>
+            </tr>
+          </thead>
+          <tbody id="uwIpcrTableBody"></tbody>
+          <tfoot>
+            <tr class="ipcr-total-row">
+              <th colspan="4" style="text-align:right">SUMMARY TOTALS:</th>
+              <th id="ipcrTotalWeight">100.0%</th>
+              <th>—</th>
+              <th id="ipcrFinalWeightedScore">—</th>
+              <th id="ipcrTotalAdjectival">—</th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div class="ipcr-summary-banner">
+        <div class="ipcr-grade-card">
+          <div class="ipcr-grade-label">FINAL NUMERICAL RATING</div>
+          <div class="ipcr-grade-score" id="ipcrBannerScore">0.00 / 5.00</div>
+        </div>
+        <div class="ipcr-grade-card">
+          <div class="ipcr-grade-label">FINAL ADJECTIVAL RATING</div>
+          <div><span class="ipcr-adjectival-pill" id="ipcrBannerAdjectival">UNRATED</span></div>
+        </div>
+        <div class="ipcr-grade-card">
+          <div class="ipcr-grade-label">MACRO TARGET ACCOMPLISHMENT</div>
+          <div class="ipcr-grade-sub" id="ipcrBannerMacro">0.0% Portfolio Average</div>
+        </div>
+      </div>
     </div>
   </div>
 </div></div>
@@ -2912,7 +3038,176 @@ function openUwScorecard(uw){
     `;
   });
   document.getElementById('uwCardMuniTableBody').innerHTML=tbodyHtml;
+
+  // Populate IPCR Form (Based strictly on Accomplishment against Target, without Q|E|T)
+  const ipcrMfos = [
+    {
+      mfo: 'MFO 1: Farmers Insured under RSBSA Program',
+      desc: 'Individual smallholder farmers enrolled & insured (Rice, Corn, HVC, Livestock, Fisheries, NCA)',
+      tgtStr: fmtNum(totals.totalFarmers25),
+      actStr: fmtNum(totals.totalFarmers),
+      pct: parseFloat(totals.totalPct) || 0,
+      weight: 25.0
+    },
+    {
+      mfo: 'MFO 2: Government Premium Subsidy (GPS) Generation',
+      desc: 'Volume of premium subsidy mobilized (₱ Millions)',
+      tgtStr: '₱' + (totals.gps2025 || 0).toFixed(3) + 'M',
+      actStr: '₱' + (totals.gps2026 || 0).toFixed(3) + 'M',
+      pct: parseFloat(totals.gpsPct) || 0,
+      weight: 25.0
+    },
+    {
+      mfo: 'MFO 3: Lending / Institutional Credit Coverage (ADSS)',
+      desc: 'Credit Life & Term Insurance coverage for borrowing agrarian reform beneficiaries & small farmers',
+      tgtStr: fmtNum(totals.adss25),
+      actStr: fmtNum(totals.adss26),
+      pct: parseFloat(totals.adssPct) || 0,
+      weight: 20.0
+    },
+    {
+      mfo: 'MFO 4: Coconut Farmers Industry Dev. Plan (CFIDP)',
+      desc: 'Special insurance coverage for coconut farmers & farmworkers under RA 11524',
+      tgtStr: fmtNum(totals.cfidp25),
+      actStr: fmtNum(totals.cfidp26),
+      pct: parseFloat(totals.cfidpPct) || 0,
+      weight: 15.0
+    },
+    {
+      mfo: 'MFO 5: Special Lending & Agri-Agra Coverage',
+      desc: 'Agri-Agra penal credit and special institutional window policies',
+      tgtStr: (totals.agriAgra25 || 0).toFixed(2),
+      actStr: (totals.agriAgra || 0).toFixed(2),
+      pct: parseFloat(totals.agriAgraPct) || 0,
+      weight: 7.5
+    },
+    {
+      mfo: 'MFO 6: PCIC Regular & Commercial Lines',
+      desc: 'Non-subsidized commercial and self-financed insurance policies',
+      tgtStr: (totals.regular25 || 0).toFixed(2),
+      actStr: (totals.regular || 0).toFixed(2),
+      pct: parseFloat(totals.regularPct) || 0,
+      weight: 7.5
+    }
+  ];
+
+  let ipcrRowsHtml = '';
+  let ipcrTotWeight = 0;
+  let ipcrFinalScore = 0;
+
+  ipcrMfos.forEach(item => {
+    const rating = calcCscRating(item.pct);
+    const weighted = +(rating * (item.weight / 100)).toFixed(3);
+    const adjectival = getCscAdjectival(rating);
+    const badgeClass = getCscAdjectivalClass(rating);
+    ipcrTotWeight += item.weight;
+    ipcrFinalScore += weighted;
+
+    ipcrRowsHtml += `
+      <tr>
+        <td class="mfo-cell">
+          <strong>${escHtml(item.mfo)}</strong>
+          <div style="font-size:0.7rem;color:var(--muted);margin-top:2px">${escHtml(item.desc)}</div>
+        </td>
+        <td><strong>${item.tgtStr}</strong></td>
+        <td><strong>${item.actStr}</strong></td>
+        <td style="font-weight:700;color:${item.pct >= 100 ? 'var(--high)' : (item.pct >= 51 ? 'var(--mid)' : 'var(--low)')}">
+          ${item.pct.toFixed(1)}%
+        </td>
+        <td>${item.weight.toFixed(1)}%</td>
+        <td style="font-weight:700">${rating.toFixed(2)}</td>
+        <td style="font-weight:700;color:var(--brand)">${weighted.toFixed(2)}</td>
+        <td><span class="ipcr-adjectival-pill ${badgeClass}" style="font-size:0.72rem;padding:3px 8px">${adjectival}</span></td>
+      </tr>
+    `;
+  });
+
+  const ipcrFinalAdj = getCscAdjectival(ipcrFinalScore);
+  const ipcrFinalAdjClass = getCscAdjectivalClass(ipcrFinalScore);
+
+  const ipcrTbody = document.getElementById('uwIpcrTableBody');
+  if (ipcrTbody) ipcrTbody.innerHTML = ipcrRowsHtml;
+
+  const ipcrTotWeightEl = document.getElementById('ipcrTotalWeight');
+  if (ipcrTotWeightEl) ipcrTotWeightEl.textContent = ipcrTotWeight.toFixed(1) + '%';
+
+  const ipcrFinalWeightedEl = document.getElementById('ipcrFinalWeightedScore');
+  if (ipcrFinalWeightedEl) ipcrFinalWeightedEl.textContent = ipcrFinalScore.toFixed(2);
+
+  const ipcrTotalAdjEl = document.getElementById('ipcrTotalAdjectival');
+  if (ipcrTotalAdjEl) ipcrTotalAdjEl.innerHTML = `<span class="ipcr-adjectival-pill ${ipcrFinalAdjClass}" style="font-size:0.72rem;padding:3px 8px">${ipcrFinalAdj}</span>`;
+
+  // Meta Elements
+  const ipcrRateeEl = document.getElementById('ipcrRateeName');
+  if (ipcrRateeEl) ipcrRateeEl.textContent = asstMatch ? uw.replace(/\s*\(Asst:.*\)/, '').trim() : uw;
+
+  const ipcrTerritoryEl = document.getElementById('ipcrTerritory');
+  if (ipcrTerritoryEl) ipcrTerritoryEl.textContent = `${provStr} (${items.length} Municipalities)`;
+
+  // Summary Banner
+  const ipcrScoreEl = document.getElementById('ipcrBannerScore');
+  if (ipcrScoreEl) ipcrScoreEl.textContent = `${ipcrFinalScore.toFixed(2)} / 5.00`;
+
+  const ipcrAdjEl = document.getElementById('ipcrBannerAdjectival');
+  if (ipcrAdjEl) {
+    ipcrAdjEl.className = `ipcr-adjectival-pill ${ipcrFinalAdjClass}`;
+    ipcrAdjEl.textContent = ipcrFinalAdj;
+  }
+
+  const ipcrMacroEl = document.getElementById('ipcrBannerMacro');
+  if (ipcrMacroEl) ipcrMacroEl.textContent = `${totals.overall}% Average Territory Target Accomplishment`;
+
+  switchUwTab(currentUwTab || 'dossier');
   modal.classList.add('show');
+}
+
+function calcCscRating(pct){
+  if(pct >= 130) return 5.00;
+  if(pct >= 115) return +(4.0 + ((pct - 115) / 15) * 0.99).toFixed(2);
+  if(pct >= 100) return +(3.0 + ((pct - 100) / 15) * 0.99).toFixed(2);
+  if(pct >= 51)  return +(2.0 + ((pct - 51)  / 49) * 0.99).toFixed(2);
+  if(pct > 0)    return +(1.0 + (pct / 50) * 0.99).toFixed(2);
+  return 1.00;
+}
+
+function getCscAdjectival(rating){
+  if(rating >= 4.5) return 'Outstanding (O)';
+  if(rating >= 3.5) return 'Very Satisfactory (VS)';
+  if(rating >= 2.5) return 'Satisfactory (S)';
+  if(rating >= 1.5) return 'Unsatisfactory (U)';
+  return 'Poor (P)';
+}
+
+function getCscAdjectivalClass(rating){
+  if(rating >= 4.5) return 'ipcr-badge-o';
+  if(rating >= 3.5) return 'ipcr-badge-vs';
+  if(rating >= 2.5) return 'ipcr-badge-s';
+  if(rating >= 1.5) return 'ipcr-badge-u';
+  return 'ipcr-badge-p';
+}
+
+let currentUwTab = 'dossier';
+function switchUwTab(tab){
+  currentUwTab = tab;
+  const dView = document.getElementById('uwDossierView');
+  const iView = document.getElementById('uwIpcrView');
+  const dBtn = document.getElementById('uwTabDossierBtn');
+  const iBtn = document.getElementById('uwTabIpcrBtn');
+  const prnBtn = document.getElementById('uwCardPrintBtn');
+  if(!dView || !iView) return;
+  if(tab === 'ipcr'){
+    dView.style.display = 'none';
+    iView.style.display = 'block';
+    if(dBtn) dBtn.classList.remove('active');
+    if(iBtn) iBtn.classList.add('active');
+    if(prnBtn) prnBtn.innerHTML = '🖨️ Print IPCR Form';
+  }else{
+    dView.style.display = 'flex';
+    iView.style.display = 'none';
+    if(dBtn) dBtn.classList.add('active');
+    if(iBtn) iBtn.classList.remove('active');
+    if(prnBtn) prnBtn.innerHTML = '🖨️ Print Dossier';
+  }
 }
 
 function closeUwScorecard(){
@@ -3311,6 +3606,14 @@ document.addEventListener('click',function(e){
   }
   if(e.target.closest('#uwCardCloseBtn')){
     closeUwScorecard();
+    return;
+  }
+  if(e.target.closest('#uwTabDossierBtn')){
+    switchUwTab('dossier');
+    return;
+  }
+  if(e.target.closest('#uwTabIpcrBtn')){
+    switchUwTab('ipcr');
     return;
   }
   if(e.target.closest('#uwCardPrintBtn')){
