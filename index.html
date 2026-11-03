@@ -330,14 +330,17 @@ body.compact .cc-crops,body.compact .cc-crops-g{display:none}
 .ipcr-meta-lbl{font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
 .ipcr-meta-val{font-size:.85rem;font-weight:600;color:var(--brand)}
 
-.ipcr-table-wrap{border:1px solid #cbd5e1;border-radius:6px;overflow-x:auto}
-.ipcr-table{width:100%;border-collapse:collapse;font-size:.8rem}
-.ipcr-table th, .ipcr-table td{border:1px solid #cbd5e1;padding:8px 10px}
-.ipcr-table th{background:#f1f5f9;color:var(--brand);font-weight:700;text-align:center}
-.ipcr-table td{text-align:center}
-.ipcr-table td.mfo-cell{text-align:left;font-weight:600;color:var(--brand)}
+.ipcr-table-wrap{border:1px solid #cbd5e1;border-radius:6px;overflow-x:auto;background:#fff}
+.ipcr-table{width:100%;border-collapse:collapse;font-size:.8rem;table-layout:fixed}
+.ipcr-table th, .ipcr-table td{border:1px solid #cbd5e1;padding:8px 8px;vertical-align:middle;box-sizing:border-box}
+.ipcr-table th:first-child, .ipcr-table td:first-child{position:static!important;left:auto!important;z-index:auto!important;min-width:0!important;background:#fff}
+.ipcr-table th{background:#f1f5f9;color:var(--brand);font-weight:700;text-align:center;font-size:.75rem;white-space:nowrap}
+.ipcr-table td{text-align:center;white-space:nowrap}
+.ipcr-table td.mfo-cell{text-align:left!important;font-weight:600;color:var(--brand);white-space:normal!important;line-height:1.35;padding:8px 12px!important;word-break:break-word;overflow-wrap:break-word}
+.ipcr-table td.mfo-cell .mfo-title{font-size:.82rem;font-weight:700;color:var(--brand);display:block;margin-bottom:2px}
+.ipcr-table td.mfo-cell .mfo-desc{font-size:.71rem;font-weight:400;color:var(--muted);line-height:1.3;display:block}
 .ipcr-table tr:hover td{background:#f8fafc}
-.ipcr-total-row th{background:#e2e8f0;font-weight:800;color:var(--brand)}
+.ipcr-total-row th{background:#e2e8f0;font-weight:800;color:var(--brand);padding:8px 8px}
 
 .ipcr-summary-banner{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:14px 18px;align-items:center}
 .ipcr-grade-card{display:flex;flex-direction:column;gap:3px;text-align:center}
@@ -575,14 +578,14 @@ body.compact .cc-crops,body.compact .cc-crops-g{display:none}
         <table class="ipcr-table">
           <thead>
             <tr>
-              <th style="width:28%">Major Final Output (MFO) / Program Line</th>
-              <th style="width:11%">Target</th>
+              <th style="width:38%">Major Final Output (MFO) / Program Line</th>
+              <th style="width:10%">Target</th>
               <th style="width:11%">Actual Accomplishment</th>
-              <th style="width:10%">% Accomp</th>
-              <th style="width:8%">Weight</th>
-              <th style="width:10%">Rating (1–5)</th>
-              <th style="width:10%">Weighted Score</th>
-              <th style="width:12%">Adjectival</th>
+              <th style="width:9%">% Accomp</th>
+              <th style="width:7%">Weight</th>
+              <th style="width:8%">Rating (1–5)</th>
+              <th style="width:8%">Weighted Score</th>
+              <th style="width:9%">Adjectival</th>
             </tr>
           </thead>
           <tbody id="uwIpcrTableBody"></tbody>
@@ -3106,8 +3109,8 @@ function openUwScorecard(uw){
     ipcrRowsHtml += `
       <tr>
         <td class="mfo-cell">
-          <strong>${escHtml(item.mfo)}</strong>
-          <div style="font-size:0.7rem;color:var(--muted);margin-top:2px">${escHtml(item.desc)}</div>
+          <span class="mfo-title">${escHtml(item.mfo)}</span>
+          <span class="mfo-desc">${escHtml(item.desc)}</span>
         </td>
         <td><strong>${item.tgtStr}</strong></td>
         <td><strong>${item.actStr}</strong></td>
